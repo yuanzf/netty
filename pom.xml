@@ -329,6 +329,7 @@
     <module>testsuite-shading</module>
     <module>microbench</module>
     <module>bom</module>
+    <module>netty-learn</module>
   </modules>
 
   <dependencyManagement>
