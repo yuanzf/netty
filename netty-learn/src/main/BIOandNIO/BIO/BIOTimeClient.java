@@ -1,4 +1,4 @@
-package BIOandNIO;
+package BIOandNIO.BIO;
 
 import java.io.BufferedReader;
 import java.io.IOException;

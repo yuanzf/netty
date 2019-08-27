@@ -1,4 +1,4 @@
-package BIOandNIO;
+package BIOandNIO.BIO;
 
 import java.net.ServerSocket;
 import java.net.Socket;
