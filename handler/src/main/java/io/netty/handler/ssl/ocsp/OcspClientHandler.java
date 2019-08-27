@@ -15,13 +15,13 @@
  */
 package io.netty.handler.ssl.ocsp;
 
+import static java.util.Objects.requireNonNull;
+
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelInboundHandler;
 import io.netty.handler.ssl.ReferenceCountedOpenSslContext;
 import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
-import io.netty.util.internal.ObjectUtil;
-import io.netty.util.internal.ThrowableUtil;
 import io.netty.util.internal.UnstableApi;
 
 import javax.net.ssl.SSLHandshakeException;
@@ -33,15 +33,12 @@ import javax.net.ssl.SSLHandshakeException;
  * @see ReferenceCountedOpenSslEngine#getOcspResponse()
  */
 @UnstableApi
-public abstract class OcspClientHandler extends ChannelInboundHandlerAdapter {
-
-    private static final SSLHandshakeException OCSP_VERIFICATION_EXCEPTION = ThrowableUtil.unknownStackTrace(
-            new SSLHandshakeException("Bad OCSP response"), OcspClientHandler.class, "verify(...)");
+public abstract class OcspClientHandler implements ChannelInboundHandler {
 
     private final ReferenceCountedOpenSslEngine engine;
 
     protected OcspClientHandler(ReferenceCountedOpenSslEngine engine) {
-        this.engine = ObjectUtil.checkNotNull(engine, "engine");
+        this.engine = requireNonNull(engine, "engine");
     }
 
     /**
@@ -56,7 +53,7 @@ public abstract class OcspClientHandler extends ChannelInboundHandlerAdapter {
 
             SslHandshakeCompletionEvent event = (SslHandshakeCompletionEvent) evt;
             if (event.isSuccess() && !verify(ctx, engine)) {
-                throw OCSP_VERIFICATION_EXCEPTION;
+                throw new SSLHandshakeException("Bad OCSP response");
             }
         }
 

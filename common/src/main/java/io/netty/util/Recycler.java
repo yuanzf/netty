@@ -41,11 +41,8 @@ public abstract class Recycler<T> {
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(Recycler.class);
 
     @SuppressWarnings("rawtypes")
-    private static final Handle NOOP_HANDLE = new Handle() {
-        @Override
-        public void recycle(Object object) {
-            // NOOP
-        }
+    private static final Handle NOOP_HANDLE = object -> {
+        // NOOP
     };
     private static final AtomicInteger ID_GENERATOR = new AtomicInteger(Integer.MIN_VALUE);
     private static final int OWN_THREAD_ID = ID_GENERATOR.getAndIncrement();
@@ -111,7 +108,7 @@ public abstract class Recycler<T> {
     private final FastThreadLocal<Stack<T>> threadLocal = new FastThreadLocal<Stack<T>>() {
         @Override
         protected Stack<T> initialValue() {
-            return new Stack<T>(Recycler.this, Thread.currentThread(), maxCapacityPerThread, maxSharedCapacityFactor,
+            return new Stack<>(Recycler.this, Thread.currentThread(), maxCapacityPerThread, maxSharedCapacityFactor,
                     ratioMask, maxDelayedQueuesPerThread);
         }
 
@@ -230,7 +227,7 @@ public abstract class Recycler<T> {
             new FastThreadLocal<Map<Stack<?>, WeakOrderQueue>>() {
         @Override
         protected Map<Stack<?>, WeakOrderQueue> initialValue() {
-            return new WeakHashMap<Stack<?>, WeakOrderQueue>();
+            return new WeakHashMap<>();
         }
     };
 
@@ -322,7 +319,7 @@ public abstract class Recycler<T> {
             // Stack itself GCed.
             head = new Head(stack.availableSharedCapacity);
             head.link = tail;
-            owner = new WeakReference<Thread>(thread);
+            owner = new WeakReference<>(thread);
         }
 
         static WeakOrderQueue newQueue(Stack<?> stack, Thread thread) {
@@ -387,6 +384,7 @@ public abstract class Recycler<T> {
                     return false;
                 }
                 this.head.link = head = head.next;
+                this.head.reclaimSpace(LINK_CAPACITY);
             }
 
             final int srcStart = head.readIndex;
@@ -473,7 +471,7 @@ public abstract class Recycler<T> {
         Stack(Recycler<T> parent, Thread thread, int maxCapacity, int maxSharedCapacityFactor,
               int ratioMask, int maxDelayedQueues) {
             this.parent = parent;
-            threadRef = new WeakReference<Thread>(thread);
+            threadRef = new WeakReference<>(thread);
             this.maxCapacity = maxCapacity;
             availableSharedCapacity = new AtomicInteger(max(maxCapacity / maxSharedCapacityFactor, LINK_CAPACITY));
             elements = new DefaultHandle[min(INITIAL_CAPACITY, maxCapacity)];
@@ -655,7 +653,7 @@ public abstract class Recycler<T> {
         }
 
         DefaultHandle<T> newHandle() {
-            return new DefaultHandle<T>(this);
+            return new DefaultHandle<>(this);
         }
     }
 }

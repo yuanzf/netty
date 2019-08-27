@@ -15,6 +15,8 @@
  */
 package io.netty.handler.traffic;
 
+import static java.util.Objects.requireNonNull;
+
 import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 
@@ -174,7 +176,6 @@ public class TrafficCounter {
             if (trafficShapingHandler != null) {
                 trafficShapingHandler.doAccounting(TrafficCounter.this);
             }
-            scheduledFuture = executor.schedule(this, checkInterval.get(), TimeUnit.MILLISECONDS);
         }
     }
 
@@ -192,7 +193,7 @@ public class TrafficCounter {
             monitorActive = true;
             monitor = new TrafficMonitoringTask();
             scheduledFuture =
-                executor.schedule(monitor, localCheckInterval, TimeUnit.MILLISECONDS);
+                executor.scheduleAtFixedRate(monitor, 0, localCheckInterval, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -251,9 +252,7 @@ public class TrafficCounter {
      *            the checkInterval in millisecond between two computations.
      */
     public TrafficCounter(ScheduledExecutorService executor, String name, long checkInterval) {
-        if (name == null) {
-            throw new NullPointerException("name");
-        }
+        requireNonNull(name, "name");
 
         trafficShapingHandler = null;
         this.executor = executor;
@@ -283,9 +282,7 @@ public class TrafficCounter {
         if (trafficShapingHandler == null) {
             throw new IllegalArgumentException("trafficShapingHandler");
         }
-        if (name == null) {
-            throw new NullPointerException("name");
-        }
+        requireNonNull(name, "name");
 
         this.trafficShapingHandler = trafficShapingHandler;
         this.executor = executor;
@@ -317,7 +314,8 @@ public class TrafficCounter {
                 // No more active monitoring
                 lastTime.set(milliSecondFromNano());
             } else {
-                // Start if necessary
+                // Restart
+                stop();
                 start();
             }
         }

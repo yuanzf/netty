@@ -21,34 +21,38 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.CoalescingBufferQueue;
 import io.netty.handler.codec.http.HttpStatusClass;
+import io.netty.handler.codec.http2.Http2CodecUtil.SimpleChannelPromiseAggregator;
 import io.netty.util.internal.UnstableApi;
 
 import java.util.ArrayDeque;
+import java.util.Queue;
 
 import static io.netty.handler.codec.http.HttpStatusClass.INFORMATIONAL;
 import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_PRIORITY_WEIGHT;
+import static io.netty.handler.codec.http2.Http2Error.INTERNAL_ERROR;
 import static io.netty.handler.codec.http2.Http2Error.PROTOCOL_ERROR;
 import static io.netty.handler.codec.http2.Http2Exception.connectionError;
-import static io.netty.util.internal.ObjectUtil.checkNotNull;
 import static io.netty.util.internal.ObjectUtil.checkPositiveOrZero;
 import static java.lang.Integer.MAX_VALUE;
 import static java.lang.Math.min;
+import static java.util.Objects.requireNonNull;
 
 /**
  * Default implementation of {@link Http2ConnectionEncoder}.
  */
 @UnstableApi
-public class DefaultHttp2ConnectionEncoder implements Http2ConnectionEncoder {
+public class DefaultHttp2ConnectionEncoder implements Http2ConnectionEncoder, Http2SettingsReceivedConsumer {
     private final Http2FrameWriter frameWriter;
     private final Http2Connection connection;
     private Http2LifecycleManager lifecycleManager;
     // We prefer ArrayDeque to LinkedList because later will produce more GC.
     // This initial capacity is plenty for SETTINGS traffic.
-    private final ArrayDeque<Http2Settings> outstandingLocalSettingsQueue = new ArrayDeque<Http2Settings>(4);
+    private final Queue<Http2Settings> outstandingLocalSettingsQueue = new ArrayDeque<>(4);
+    private Queue<Http2Settings> outstandingRemoteSettingsQueue;
 
     public DefaultHttp2ConnectionEncoder(Http2Connection connection, Http2FrameWriter frameWriter) {
-        this.connection = checkNotNull(connection, "connection");
-        this.frameWriter = checkNotNull(frameWriter, "frameWriter");
+        this.connection = requireNonNull(connection, "connection");
+        this.frameWriter = requireNonNull(frameWriter, "frameWriter");
         if (connection.remote().flowController() == null) {
             connection.remote().flowController(new DefaultHttp2RemoteFlowController(connection));
         }
@@ -56,7 +60,7 @@ public class DefaultHttp2ConnectionEncoder implements Http2ConnectionEncoder {
 
     @Override
     public void lifecycleManager(Http2LifecycleManager lifecycleManager) {
-        this.lifecycleManager = checkNotNull(lifecycleManager, "lifecycleManager");
+        this.lifecycleManager = requireNonNull(lifecycleManager, "lifecycleManager");
     }
 
     @Override
@@ -274,7 +278,32 @@ public class DefaultHttp2ConnectionEncoder implements Http2ConnectionEncoder {
 
     @Override
     public ChannelFuture writeSettingsAck(ChannelHandlerContext ctx, ChannelPromise promise) {
-        return frameWriter.writeSettingsAck(ctx, promise);
+        if (outstandingRemoteSettingsQueue == null) {
+            return frameWriter.writeSettingsAck(ctx, promise);
+        }
+        Http2Settings settings = outstandingRemoteSettingsQueue.poll();
+        if (settings == null) {
+            return promise.setFailure(new Http2Exception(INTERNAL_ERROR, "attempted to write a SETTINGS ACK with no " +
+                    " pending SETTINGS"));
+        }
+        SimpleChannelPromiseAggregator aggregator = new SimpleChannelPromiseAggregator(promise, ctx.channel(),
+                ctx.executor());
+        // Acknowledge receipt of the settings. We should do this before we process the settings to ensure our
+        // remote peer applies these settings before any subsequent frames that we may send which depend upon
+        // these new settings. See https://github.com/netty/netty/issues/6520.
+        frameWriter.writeSettingsAck(ctx, aggregator.newPromise());
+
+        // We create a "new promise" to make sure that status from both the write and the application are taken into
+        // account independently.
+        ChannelPromise applySettingsPromise = aggregator.newPromise();
+        try {
+            remoteSettings(settings);
+            applySettingsPromise.setSuccess();
+        } catch (Throwable e) {
+            applySettingsPromise.setFailure(e);
+            lifecycleManager.onError(ctx, true, e);
+        }
+        return aggregator.doneAllocatingPromises();
     }
 
     @Override
@@ -365,6 +394,14 @@ public class DefaultHttp2ConnectionEncoder implements Http2ConnectionEncoder {
             throw new IllegalArgumentException(message);
         }
         return stream;
+    }
+
+    @Override
+    public void consumeReceivedSettings(Http2Settings settings) {
+        if (outstandingRemoteSettingsQueue == null) {
+            outstandingRemoteSettingsQueue = new ArrayDeque<Http2Settings>(2);
+        }
+        outstandingRemoteSettingsQueue.add(settings);
     }
 
     /**
@@ -464,13 +501,10 @@ public class DefaultHttp2ConnectionEncoder implements Http2ConnectionEncoder {
     }
 
     private void notifyLifecycleManagerOnError(ChannelFuture future, final ChannelHandlerContext ctx) {
-        future.addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(ChannelFuture future) throws Exception {
-                Throwable cause = future.cause();
-                if (cause != null) {
-                    lifecycleManager.onError(ctx, true, cause);
-                }
+        future.addListener((ChannelFutureListener) future1 -> {
+            Throwable cause = future1.cause();
+            if (cause != null) {
+                lifecycleManager.onError(ctx, true, cause);
             }
         });
     }

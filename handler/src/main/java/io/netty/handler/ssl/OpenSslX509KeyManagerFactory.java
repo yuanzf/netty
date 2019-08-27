@@ -15,11 +15,12 @@
  */
 package io.netty.handler.ssl;
 
+import static java.util.Objects.requireNonNull;
+
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.internal.tcnative.SSL;
 import io.netty.util.ReferenceCountUtil;
-import io.netty.util.internal.ObjectUtil;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
@@ -51,6 +52,8 @@ import java.util.Map;
 /**
  * Special {@link KeyManagerFactory} that pre-compute the keymaterial used when {@link SslProvider#OPENSSL} or
  * {@link SslProvider#OPENSSL_REFCNT} is used and so will improve handshake times and its performance.
+ *
+ *
  *
  * Because the keymaterial is pre-computed any modification to the {@link KeyStore} is ignored after
  * {@link #init(KeyStore, char[])} is called.
@@ -107,7 +110,7 @@ public final class OpenSslX509KeyManagerFactory extends KeyManagerFactory {
         private volatile ProviderFactory providerFactory;
 
         OpenSslKeyManagerFactorySpi(KeyManagerFactory kmf) {
-            this.kmf = ObjectUtil.checkNotNull(kmf, "kmf");
+            this.kmf = requireNonNull(kmf, "kmf");
         }
 
         @Override
@@ -181,7 +184,7 @@ public final class OpenSslX509KeyManagerFactory extends KeyManagerFactory {
                 OpenSslPopulatedKeyMaterialProvider(
                         X509KeyManager keyManager, String password, Iterable<String> aliases) {
                     super(keyManager, password);
-                    materialMap = new HashMap<String, Object>();
+                    materialMap = new HashMap<>();
                     boolean initComplete = false;
                     try {
                         for (String alias: aliases) {
@@ -252,15 +255,47 @@ public final class OpenSslX509KeyManagerFactory extends KeyManagerFactory {
     public static OpenSslX509KeyManagerFactory newEngineBased(X509Certificate[] certificateChain, String password)
             throws CertificateException, IOException,
                    KeyStoreException, NoSuchAlgorithmException, UnrecoverableKeyException {
-        KeyStore store = new OpenSslEngineKeyStore(certificateChain.clone());
+        KeyStore store = new OpenSslKeyStore(certificateChain.clone(), false);
         store.load(null, null);
         OpenSslX509KeyManagerFactory factory = new OpenSslX509KeyManagerFactory();
         factory.init(store, password == null ? null : password.toCharArray());
         return factory;
     }
 
-    private static final class OpenSslEngineKeyStore extends KeyStore {
-        private OpenSslEngineKeyStore(final X509Certificate[] certificateChain) {
+    /**
+     * See {@link OpenSslX509KeyManagerFactory#newEngineBased(X509Certificate[], String)}.
+     */
+    public static OpenSslX509KeyManagerFactory newKeyless(File chain)
+            throws CertificateException, IOException,
+            KeyStoreException, NoSuchAlgorithmException, UnrecoverableKeyException {
+        return newKeyless(SslContext.toX509Certificates(chain));
+    }
+
+    /**
+     * See {@link OpenSslX509KeyManagerFactory#newEngineBased(X509Certificate[], String)}.
+     */
+    public static OpenSslX509KeyManagerFactory newKeyless(InputStream chain)
+            throws CertificateException, IOException,
+            KeyStoreException, NoSuchAlgorithmException, UnrecoverableKeyException {
+        return newKeyless(SslContext.toX509Certificates(chain));
+    }
+
+    /**
+     * Returns a new initialized {@link OpenSslX509KeyManagerFactory} which will provide its private key by using the
+     * {@link OpenSslPrivateKeyMethod}.
+     */
+    public static OpenSslX509KeyManagerFactory newKeyless(X509Certificate... certificateChain)
+            throws CertificateException, IOException,
+            KeyStoreException, NoSuchAlgorithmException, UnrecoverableKeyException {
+        KeyStore store = new OpenSslKeyStore(certificateChain.clone(), true);
+        store.load(null, null);
+        OpenSslX509KeyManagerFactory factory = new OpenSslX509KeyManagerFactory();
+        factory.init(store, null);
+        return factory;
+    }
+
+    private static final class OpenSslKeyStore extends KeyStore {
+        private OpenSslKeyStore(final X509Certificate[] certificateChain, final boolean keyless) {
             super(new KeyStoreSpi() {
 
                 private final Date creationDate = new Date();
@@ -268,15 +303,21 @@ public final class OpenSslX509KeyManagerFactory extends KeyManagerFactory {
                 @Override
                 public Key engineGetKey(String alias, char[] password) throws UnrecoverableKeyException {
                     if (engineContainsAlias(alias)) {
-                        try {
-                            return new OpenSslPrivateKey(SSL.loadPrivateKeyFromEngine(
-                                            alias, password == null ? null : new String(password)));
-                        } catch (Exception e) {
-                            UnrecoverableKeyException keyException =
-                                    new UnrecoverableKeyException("Unable to load key from engine");
-                            keyException.initCause(e);
-                            throw keyException;
+                        final long privateKeyAddress;
+                        if (keyless) {
+                            privateKeyAddress = 0;
+                        } else {
+                            try {
+                                privateKeyAddress = SSL.loadPrivateKeyFromEngine(
+                                        alias, password == null ? null : new String(password));
+                            } catch (Exception e) {
+                                UnrecoverableKeyException keyException =
+                                        new UnrecoverableKeyException("Unable to load key from engine");
+                                keyException.initCause(e);
+                                throw keyException;
+                            }
                         }
+                        return new OpenSslPrivateKey(privateKeyAddress);
                     }
                     return null;
                 }

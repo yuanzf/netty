@@ -17,6 +17,7 @@ package io.netty.channel.kqueue;
 
 import io.netty.channel.EventLoop;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.MultithreadEventLoopGroup;
 import io.netty.util.concurrent.Future;
 import org.junit.Test;
 
@@ -29,14 +30,11 @@ public class KQueueEventLoopTest {
 
     @Test
     public void testScheduleBigDelayNotOverflow() {
-        EventLoopGroup group = new KQueueEventLoopGroup(1);
+        EventLoopGroup group = new MultithreadEventLoopGroup(1, KQueueHandler.newFactory());
 
         final EventLoop el = group.next();
-        Future<?> future = el.schedule(new Runnable() {
-            @Override
-            public void run() {
-                // NOOP
-            }
+        Future<?> future = el.schedule(() -> {
+            // NOOP
         }, Long.MAX_VALUE, TimeUnit.MILLISECONDS);
 
         assertFalse(future.awaitUninterruptibly(1000));

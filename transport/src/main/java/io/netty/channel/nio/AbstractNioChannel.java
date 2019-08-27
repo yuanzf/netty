@@ -22,20 +22,17 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.AbstractChannel;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelException;
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.ConnectTimeoutException;
 import io.netty.channel.EventLoop;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.ReferenceCounted;
-import io.netty.util.internal.ThrowableUtil;
 import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.nio.channels.CancelledKeyException;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.ConnectionPendingException;
 import java.nio.channels.SelectableChannel;
@@ -51,19 +48,11 @@ public abstract class AbstractNioChannel extends AbstractChannel {
     private static final InternalLogger logger =
             InternalLoggerFactory.getInstance(AbstractNioChannel.class);
 
-    private static final ClosedChannelException DO_CLOSE_CLOSED_CHANNEL_EXCEPTION = ThrowableUtil.unknownStackTrace(
-            new ClosedChannelException(), AbstractNioChannel.class, "doClose()");
-
     private final SelectableChannel ch;
     protected final int readInterestOp;
     volatile SelectionKey selectionKey;
     boolean readPending;
-    private final Runnable clearReadPendingRunnable = new Runnable() {
-        @Override
-        public void run() {
-            clearReadPending0();
-        }
-    };
+    private final Runnable clearReadPendingRunnable = this::clearReadPending0;
 
     /**
      * The future of the current connection attempt.  If not null, subsequent
@@ -77,11 +66,12 @@ public abstract class AbstractNioChannel extends AbstractChannel {
      * Create a new instance
      *
      * @param parent            the parent {@link Channel} by which this instance was created. May be {@code null}
+     * @param eventLoop         the {@link EventLoop} to use for all I/O.
      * @param ch                the underlying {@link SelectableChannel} on which it operates
      * @param readInterestOp    the ops to set to receive data from the {@link SelectableChannel}
      */
-    protected AbstractNioChannel(Channel parent, SelectableChannel ch, int readInterestOp) {
-        super(parent);
+    protected AbstractNioChannel(Channel parent, EventLoop eventLoop, SelectableChannel ch, int readInterestOp) {
+        super(parent, eventLoop);
         this.ch = ch;
         this.readInterestOp = readInterestOp;
         try {
@@ -114,11 +104,6 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         return ch;
     }
 
-    @Override
-    public NioEventLoop eventLoop() {
-        return (NioEventLoop) super.eventLoop();
-    }
-
     /**
      * Return the current {@link SelectionKey}
      */
@@ -147,12 +132,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
             if (eventLoop.inEventLoop()) {
                 setReadPending0(readPending);
             } else {
-                eventLoop.execute(new Runnable() {
-                    @Override
-                    public void run() {
-                        setReadPending0(readPending);
-                    }
-                });
+                eventLoop.execute(() -> setReadPending0(readPending));
             }
         } else {
             // Best effort if we are not registered yet clear readPending.
@@ -260,29 +240,23 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                     // Schedule connect timeout.
                     int connectTimeoutMillis = config().getConnectTimeoutMillis();
                     if (connectTimeoutMillis > 0) {
-                        connectTimeoutFuture = eventLoop().schedule(new Runnable() {
-                            @Override
-                            public void run() {
-                                ChannelPromise connectPromise = AbstractNioChannel.this.connectPromise;
-                                ConnectTimeoutException cause =
-                                        new ConnectTimeoutException("connection timed out: " + remoteAddress);
-                                if (connectPromise != null && connectPromise.tryFailure(cause)) {
-                                    close(voidPromise());
-                                }
+                        connectTimeoutFuture = eventLoop().schedule(() -> {
+                            ChannelPromise connectPromise = AbstractNioChannel.this.connectPromise;
+                            ConnectTimeoutException cause =
+                                    new ConnectTimeoutException("connection timed out: " + remoteAddress);
+                            if (connectPromise != null && connectPromise.tryFailure(cause)) {
+                                close(voidPromise());
                             }
                         }, connectTimeoutMillis, TimeUnit.MILLISECONDS);
                     }
 
-                    promise.addListener(new ChannelFutureListener() {
-                        @Override
-                        public void operationComplete(ChannelFuture future) throws Exception {
-                            if (future.isCancelled()) {
-                                if (connectTimeoutFuture != null) {
-                                    connectTimeoutFuture.cancel(false);
-                                }
-                                connectPromise = null;
-                                close(voidPromise());
+                    promise.addListener((ChannelFutureListener) future -> {
+                        if (future.isCancelled()) {
+                            if (connectTimeoutFuture != null) {
+                                connectTimeoutFuture.cancel(false);
                             }
+                            connectPromise = null;
+                            close(voidPromise());
                         }
                     });
                 }
@@ -309,6 +283,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
             // because what happened is what happened.
             if (!wasActive && active) {
                 pipeline().fireChannelActive();
+                readIfIsAutoRead();
             }
 
             // If a user cancelled the connection attempt, close the channel, which is followed by channelInactive().
@@ -374,35 +349,13 @@ public abstract class AbstractNioChannel extends AbstractChannel {
     }
 
     @Override
-    protected boolean isCompatible(EventLoop loop) {
-        return loop instanceof NioEventLoop;
-    }
-
-    @Override
     protected void doRegister() throws Exception {
-        boolean selected = false;
-        for (;;) {
-            try {
-                selectionKey = javaChannel().register(eventLoop().unwrappedSelector(), 0, this);
-                return;
-            } catch (CancelledKeyException e) {
-                if (!selected) {
-                    // Force the Selector to select now as the "canceled" SelectionKey may still be
-                    // cached and not removed because no Select.select(..) operation was called yet.
-                    eventLoop().selectNow();
-                    selected = true;
-                } else {
-                    // We forced a select operation on the selector before but the SelectionKey is still cached
-                    // for whatever reason. JDK bug ?
-                    throw e;
-                }
-            }
-        }
+       eventLoop().unsafe().register(this);
     }
 
     @Override
     protected void doDeregister() throws Exception {
-        eventLoop().cancel(selectionKey());
+        eventLoop().unsafe().deregister(this);
     }
 
     @Override
@@ -505,7 +458,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         ChannelPromise promise = connectPromise;
         if (promise != null) {
             // Use tryFailure() instead of setFailure() to avoid the race against cancel().
-            promise.tryFailure(DO_CLOSE_CLOSED_CHANNEL_EXCEPTION);
+            promise.tryFailure(new ClosedChannelException());
             connectPromise = null;
         }
 

@@ -20,23 +20,22 @@ import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandler;
-import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.DefaultFileRegion;
 import io.netty.channel.FileRegion;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.util.internal.PlatformDependent;
 import org.hamcrest.CoreMatchers;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.channels.WritableByteChannel;
 import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -47,7 +46,7 @@ public class SocketFileRegionTest extends AbstractSocketTest {
     static final byte[] data = new byte[1048576 * 10];
 
     static {
-        PlatformDependent.threadLocalRandom().nextBytes(data);
+        ThreadLocalRandom.current().nextBytes(data);
     }
 
     @Test
@@ -114,14 +113,14 @@ public class SocketFileRegionTest extends AbstractSocketTest {
                 // Just drop the message.
             }
         });
-        cb.handler(new ChannelInboundHandlerAdapter());
+        cb.handler(new ChannelHandler() { });
 
         Channel sc = sb.bind().sync().channel();
         Channel cc = cb.connect(sc.localAddress()).sync().channel();
 
         // Request file region which is bigger then the underlying file.
         FileRegion region = new DefaultFileRegion(
-                new FileInputStream(file).getChannel(), 0, data.length + 1024);
+                new RandomAccessFile(file, "r").getChannel(), 0, data.length + 1024);
 
         assertThat(cc.writeAndFlush(region).await().cause(), CoreMatchers.<Throwable>instanceOf(IOException.class));
         cc.close().sync();
@@ -139,7 +138,7 @@ public class SocketFileRegionTest extends AbstractSocketTest {
         file.deleteOnExit();
 
         final FileOutputStream out = new FileOutputStream(file);
-        final Random random = PlatformDependent.threadLocalRandom();
+        final Random random = ThreadLocalRandom.current();
 
         // Prepend random data which will not be transferred, so that we can test non-zero start offset
         final int startOffset = random.nextInt(8192);
@@ -157,7 +156,7 @@ public class SocketFileRegionTest extends AbstractSocketTest {
 
         out.close();
 
-        ChannelInboundHandler ch = new SimpleChannelInboundHandler<Object>() {
+        ChannelHandler ch = new SimpleChannelInboundHandler<Object>() {
             @Override
             public void channelRead0(ChannelHandlerContext ctx, Object msg) throws Exception {
             }
@@ -183,8 +182,8 @@ public class SocketFileRegionTest extends AbstractSocketTest {
 
         Channel cc = cb.connect(sc.localAddress()).sync().channel();
         FileRegion region = new DefaultFileRegion(
-                new FileInputStream(file).getChannel(), startOffset, data.length - bufferSize);
-        FileRegion emptyRegion = new DefaultFileRegion(new FileInputStream(file).getChannel(), 0, 0);
+                new RandomAccessFile(file, "r").getChannel(), startOffset, data.length - bufferSize);
+        FileRegion emptyRegion = new DefaultFileRegion(new RandomAccessFile(file, "r").getChannel(), 0, 0);
 
         if (!defaultFileRegion) {
             region = new FileRegionWrapper(region);
@@ -236,7 +235,7 @@ public class SocketFileRegionTest extends AbstractSocketTest {
     private static class TestHandler extends SimpleChannelInboundHandler<ByteBuf> {
         private final boolean autoRead;
         volatile Channel channel;
-        final AtomicReference<Throwable> exception = new AtomicReference<Throwable>();
+        final AtomicReference<Throwable> exception = new AtomicReference<>();
         volatile int counter;
 
         TestHandler(boolean autoRead) {

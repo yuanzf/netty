@@ -16,9 +16,11 @@
 package io.netty.buffer;
 
 
-import io.netty.util.internal.PlatformDependent;
+import static java.util.Objects.requireNonNull;
 
 import java.nio.ByteBuffer;
+
+import io.netty.util.internal.PlatformDependent;
 
 
 /**
@@ -62,9 +64,7 @@ final class ReadOnlyUnsafeDirectByteBuf extends ReadOnlyByteBufferBuf {
     @Override
     public ByteBuf getBytes(int index, ByteBuf dst, int dstIndex, int length) {
         checkIndex(index, length);
-        if (dst == null) {
-            throw new NullPointerException("dst");
-        }
+        requireNonNull(dst, "dst");
         if (dstIndex < 0 || dstIndex > dst.capacity() - length) {
             throw new IndexOutOfBoundsException("dstIndex: " + dstIndex);
         }
@@ -82,9 +82,7 @@ final class ReadOnlyUnsafeDirectByteBuf extends ReadOnlyByteBufferBuf {
     @Override
     public ByteBuf getBytes(int index, byte[] dst, int dstIndex, int length) {
         checkIndex(index, length);
-        if (dst == null) {
-            throw new NullPointerException("dst");
-        }
+        requireNonNull(dst, "dst");
         if (dstIndex < 0 || dstIndex > dst.length - length) {
             throw new IndexOutOfBoundsException(String.format(
                     "dstIndex: %d, length: %d (expected: range(0, %d))", dstIndex, length, dst.length));
@@ -93,20 +91,6 @@ final class ReadOnlyUnsafeDirectByteBuf extends ReadOnlyByteBufferBuf {
         if (length != 0) {
             PlatformDependent.copyMemory(addr(index), dst, dstIndex, length);
         }
-        return this;
-    }
-
-    @Override
-    public ByteBuf getBytes(int index, ByteBuffer dst) {
-        checkIndex(index);
-        if (dst == null) {
-            throw new NullPointerException("dst");
-        }
-
-        int bytesToCopy = Math.min(capacity() - index, dst.remaining());
-        ByteBuffer tmpBuf = internalNioBuffer();
-        tmpBuf.clear().position(index).limit(index + bytesToCopy);
-        dst.put(tmpBuf);
         return this;
     }
 

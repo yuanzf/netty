@@ -33,7 +33,7 @@ public final class HttpServerCodec extends CombinedChannelDuplexHandler<HttpRequ
         implements HttpServerUpgradeHandler.SourceCodec {
 
     /** A queue that is used for correlating a request and a response. */
-    private final Queue<HttpMethod> queue = new ArrayDeque<HttpMethod>();
+    private final Queue<HttpMethod> queue = new ArrayDeque<>();
 
     /**
      * Creates a new instance with the default decoder options
@@ -41,32 +41,32 @@ public final class HttpServerCodec extends CombinedChannelDuplexHandler<HttpRequ
      * {@code maxChunkSize (8192)}).
      */
     public HttpServerCodec() {
-        this(4096, 8192, 8192);
+        this(4096, 8192);
     }
 
     /**
      * Creates a new instance with the specified decoder options.
      */
-    public HttpServerCodec(int maxInitialLineLength, int maxHeaderSize, int maxChunkSize) {
-        init(new HttpServerRequestDecoder(maxInitialLineLength, maxHeaderSize, maxChunkSize),
+    public HttpServerCodec(int maxInitialLineLength, int maxHeaderSize) {
+        init(new HttpServerRequestDecoder(maxInitialLineLength, maxHeaderSize),
                 new HttpServerResponseEncoder());
     }
 
     /**
      * Creates a new instance with the specified decoder options.
      */
-    public HttpServerCodec(int maxInitialLineLength, int maxHeaderSize, int maxChunkSize, boolean validateHeaders) {
-        init(new HttpServerRequestDecoder(maxInitialLineLength, maxHeaderSize, maxChunkSize, validateHeaders),
+    public HttpServerCodec(int maxInitialLineLength, int maxHeaderSize, boolean validateHeaders) {
+        init(new HttpServerRequestDecoder(maxInitialLineLength, maxHeaderSize, validateHeaders),
                 new HttpServerResponseEncoder());
     }
 
     /**
      * Creates a new instance with the specified decoder options.
      */
-    public HttpServerCodec(int maxInitialLineLength, int maxHeaderSize, int maxChunkSize, boolean validateHeaders,
+    public HttpServerCodec(int maxInitialLineLength, int maxHeaderSize, boolean validateHeaders,
                            int initialBufferSize) {
         init(
-          new HttpServerRequestDecoder(maxInitialLineLength, maxHeaderSize, maxChunkSize,
+          new HttpServerRequestDecoder(maxInitialLineLength, maxHeaderSize,
                   validateHeaders, initialBufferSize),
           new HttpServerResponseEncoder());
     }
@@ -81,20 +81,18 @@ public final class HttpServerCodec extends CombinedChannelDuplexHandler<HttpRequ
     }
 
     private final class HttpServerRequestDecoder extends HttpRequestDecoder {
-
-        HttpServerRequestDecoder(int maxInitialLineLength, int maxHeaderSize, int maxChunkSize) {
-            super(maxInitialLineLength, maxHeaderSize, maxChunkSize);
+        HttpServerRequestDecoder(int maxInitialLineLength, int maxHeaderSize) {
+            super(maxInitialLineLength, maxHeaderSize);
         }
 
-        HttpServerRequestDecoder(int maxInitialLineLength, int maxHeaderSize, int maxChunkSize,
+        HttpServerRequestDecoder(int maxInitialLineLength, int maxHeaderSize,
                                         boolean validateHeaders) {
-            super(maxInitialLineLength, maxHeaderSize, maxChunkSize, validateHeaders);
+            super(maxInitialLineLength, maxHeaderSize, validateHeaders);
         }
 
-        HttpServerRequestDecoder(int maxInitialLineLength, int maxHeaderSize, int maxChunkSize,
-
+        HttpServerRequestDecoder(int maxInitialLineLength, int maxHeaderSize,
                                         boolean validateHeaders, int initialBufferSize) {
-            super(maxInitialLineLength, maxHeaderSize, maxChunkSize, validateHeaders, initialBufferSize);
+            super(maxInitialLineLength, maxHeaderSize, validateHeaders, initialBufferSize);
         }
 
         @Override

@@ -15,11 +15,13 @@
  */
 package io.netty.handler.codec.smtp;
 
+import static java.util.Objects.requireNonNull;
+
 import io.netty.util.AsciiString;
-import io.netty.util.internal.ObjectUtil;
 import io.netty.util.internal.UnstableApi;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -92,11 +94,9 @@ public final class SmtpRequests {
             return new DefaultSmtpRequest(SmtpCommand.MAIL,
                                           sender != null ? "FROM:<" + sender + '>' : FROM_NULL_SENDER);
         } else {
-            List<CharSequence> params = new ArrayList<CharSequence>(mailParameters.length + 1);
+            List<CharSequence> params = new ArrayList<>(mailParameters.length + 1);
             params.add(sender != null? "FROM:<" + sender + '>' : FROM_NULL_SENDER);
-            for (CharSequence param : mailParameters) {
-                params.add(param);
-            }
+            Collections.addAll(params, mailParameters);
             return new DefaultSmtpRequest(SmtpCommand.MAIL, params);
         }
     }
@@ -105,15 +105,13 @@ public final class SmtpRequests {
      * Creates a {@code RCPT} request.
      */
     public static SmtpRequest rcpt(CharSequence recipient, CharSequence... rcptParameters) {
-        ObjectUtil.checkNotNull(recipient, "recipient");
+        requireNonNull(recipient, "recipient");
         if (rcptParameters == null || rcptParameters.length == 0) {
             return new DefaultSmtpRequest(SmtpCommand.RCPT, "TO:<" + recipient + '>');
         } else {
-            List<CharSequence> params = new ArrayList<CharSequence>(rcptParameters.length + 1);
+            List<CharSequence> params = new ArrayList<>(rcptParameters.length + 1);
             params.add("TO:<" + recipient + '>');
-            for (CharSequence param : rcptParameters) {
-                params.add(param);
-            }
+            Collections.addAll(params, rcptParameters);
             return new DefaultSmtpRequest(SmtpCommand.RCPT, params);
         }
     }
@@ -122,14 +120,14 @@ public final class SmtpRequests {
      * Creates a {@code EXPN} request.
      */
     public static SmtpRequest expn(CharSequence mailingList) {
-        return new DefaultSmtpRequest(SmtpCommand.EXPN, ObjectUtil.checkNotNull(mailingList, "mailingList"));
+        return new DefaultSmtpRequest(SmtpCommand.EXPN, requireNonNull(mailingList, "mailingList"));
     }
 
     /**
      * Creates a {@code VRFY} request.
      */
     public static SmtpRequest vrfy(CharSequence user) {
-        return new DefaultSmtpRequest(SmtpCommand.VRFY, ObjectUtil.checkNotNull(user, "user"));
+        return new DefaultSmtpRequest(SmtpCommand.VRFY, requireNonNull(user, "user"));
     }
 
     private SmtpRequests() { }

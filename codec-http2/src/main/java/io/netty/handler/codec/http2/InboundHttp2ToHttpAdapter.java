@@ -30,11 +30,11 @@ import static io.netty.handler.codec.http2.Http2Error.INTERNAL_ERROR;
 import static io.netty.handler.codec.http2.Http2Error.PROTOCOL_ERROR;
 import static io.netty.handler.codec.http2.Http2Exception.connectionError;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
-import static io.netty.util.internal.ObjectUtil.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
 /**
  * This adapter provides just header/data events from the HTTP message flow defined
- * here <a href="http://tools.ietf.org/html/draft-ietf-httpbis-http2-16#section-8.1.">HTTP/2 Spec Message Flow</a>.
+ * in <a href="https://tools.ietf.org/html/rfc7540#section-8.1">[RFC 7540], Section 8.1</a>.
  * <p>
  * See {@link HttpToHttp2ConnectionHandler} to get translation from HTTP/1.x objects to HTTP/2 frames for writes.
  */
@@ -73,7 +73,7 @@ public class InboundHttp2ToHttpAdapter extends Http2EventAdapter {
     protected InboundHttp2ToHttpAdapter(Http2Connection connection, int maxContentLength,
                                         boolean validateHttpHeaders, boolean propagateSettings) {
 
-        checkNotNull(connection, "connection");
+        requireNonNull(connection, "connection");
         if (maxContentLength <= 0) {
             throw new IllegalArgumentException("maxContentLength: " + maxContentLength + " (expected: > 0)");
         }

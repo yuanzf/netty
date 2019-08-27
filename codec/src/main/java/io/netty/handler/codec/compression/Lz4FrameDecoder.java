@@ -21,12 +21,12 @@ import io.netty.handler.codec.ByteToMessageDecoder;
 import net.jpountz.lz4.LZ4Exception;
 import net.jpountz.lz4.LZ4Factory;
 import net.jpountz.lz4.LZ4FastDecompressor;
-import net.jpountz.xxhash.XXHashFactory;
 
 import java.util.List;
 import java.util.zip.Checksum;
 
 import static io.netty.handler.codec.compression.Lz4Constants.*;
+import static java.util.Objects.requireNonNull;
 
 /**
  * Uncompresses a {@link ByteBuf} encoded with the LZ4 format.
@@ -124,9 +124,7 @@ public class Lz4FrameDecoder extends ByteToMessageDecoder {
      *                           <a href="https://github.com/Cyan4973/xxHash">Github</a>.
      */
     public Lz4FrameDecoder(LZ4Factory factory, boolean validateChecksums) {
-        this(factory, validateChecksums ?
-                XXHashFactory.fastestInstance().newStreamingHash32(DEFAULT_SEED).asChecksum()
-              : null);
+        this(factory, validateChecksums ? new Lz4XXHash32(DEFAULT_SEED) : null);
     }
 
     /**
@@ -139,9 +137,7 @@ public class Lz4FrameDecoder extends ByteToMessageDecoder {
      *                  You may set {@code null} if you do not want to validate checksum of each block
      */
     public Lz4FrameDecoder(LZ4Factory factory, Checksum checksum) {
-        if (factory == null) {
-            throw new NullPointerException("factory");
-        }
+        requireNonNull(factory, "factory");
         decompressor = factory.fastDecompressor();
         this.checksum = checksum == null ? null : ByteBufChecksum.wrapChecksum(checksum);
     }

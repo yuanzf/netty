@@ -18,7 +18,7 @@ package io.netty.handler.codec.http2;
 
 import io.netty.util.internal.UnstableApi;
 
-import static io.netty.util.internal.ObjectUtil.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
 /**
  * Builder for the {@link Http2FrameCodec}.
@@ -31,6 +31,8 @@ public class Http2FrameCodecBuilder extends
 
     Http2FrameCodecBuilder(boolean server) {
         server(server);
+        // For backwards compatibility we should disable to timeout by default at this layer.
+        gracefulShutdownTimeoutMillis(0);
     }
 
     /**
@@ -49,7 +51,7 @@ public class Http2FrameCodecBuilder extends
 
     // For testing only.
     Http2FrameCodecBuilder frameWriter(Http2FrameWriter frameWriter) {
-        this.frameWriter = checkNotNull(frameWriter, "frameWriter");
+        this.frameWriter = requireNonNull(frameWriter, "frameWriter");
         return this;
     }
 
@@ -119,6 +121,16 @@ public class Http2FrameCodecBuilder extends
     }
 
     @Override
+    public int encoderEnforceMaxQueuedControlFrames() {
+        return super.encoderEnforceMaxQueuedControlFrames();
+    }
+
+    @Override
+    public Http2FrameCodecBuilder encoderEnforceMaxQueuedControlFrames(int maxQueuedControlFrames) {
+        return super.encoderEnforceMaxQueuedControlFrames(maxQueuedControlFrames);
+    }
+
+    @Override
     public Http2HeadersEncoder.SensitivityDetector headerSensitivityDetector() {
         return super.headerSensitivityDetector();
     }
@@ -135,8 +147,34 @@ public class Http2FrameCodecBuilder extends
     }
 
     @Override
+    @Deprecated
     public Http2FrameCodecBuilder initialHuffmanDecodeCapacity(int initialHuffmanDecodeCapacity) {
         return super.initialHuffmanDecodeCapacity(initialHuffmanDecodeCapacity);
+    }
+
+    @Override
+    public Http2FrameCodecBuilder autoAckSettingsFrame(boolean autoAckSettings) {
+        return super.autoAckSettingsFrame(autoAckSettings);
+    }
+
+    @Override
+    public Http2FrameCodecBuilder autoAckPingFrame(boolean autoAckPingFrame) {
+        return super.autoAckPingFrame(autoAckPingFrame);
+    }
+
+    @Override
+    public Http2FrameCodecBuilder decoupleCloseAndGoAway(boolean decoupleCloseAndGoAway) {
+        return super.decoupleCloseAndGoAway(decoupleCloseAndGoAway);
+    }
+
+    @Override
+    public int decoderEnforceMaxConsecutiveEmptyDataFrames() {
+        return super.decoderEnforceMaxConsecutiveEmptyDataFrames();
+    }
+
+    @Override
+    public Http2FrameCodecBuilder decoderEnforceMaxConsecutiveEmptyDataFrames(int maxConsecutiveEmptyFrames) {
+        return super.decoderEnforceMaxConsecutiveEmptyDataFrames(maxConsecutiveEmptyFrames);
     }
 
     /**
@@ -162,8 +200,12 @@ public class Http2FrameCodecBuilder extends
             if (encoderEnforceMaxConcurrentStreams()) {
                 encoder = new StreamBufferingEncoder(encoder);
             }
-            Http2ConnectionDecoder decoder = new DefaultHttp2ConnectionDecoder(connection, encoder, frameReader);
-
+            Http2ConnectionDecoder decoder = new DefaultHttp2ConnectionDecoder(connection, encoder, frameReader,
+                    promisedRequestVerifier(), isAutoAckSettingsFrame(), isAutoAckPingFrame());
+            int maxConsecutiveEmptyDataFrames = decoderEnforceMaxConsecutiveEmptyDataFrames();
+            if (maxConsecutiveEmptyDataFrames > 0) {
+                decoder = new Http2EmptyDataFrameConnectionDecoder(decoder, maxConsecutiveEmptyDataFrames);
+            }
             return build(decoder, encoder, initialSettings());
         }
         return super.build();
@@ -172,6 +214,8 @@ public class Http2FrameCodecBuilder extends
     @Override
     protected Http2FrameCodec build(
             Http2ConnectionDecoder decoder, Http2ConnectionEncoder encoder, Http2Settings initialSettings) {
-        return new Http2FrameCodec(encoder, decoder, initialSettings);
+        Http2FrameCodec codec = new Http2FrameCodec(encoder, decoder, initialSettings, decoupleCloseAndGoAway());
+        codec.gracefulShutdownTimeoutMillis(gracefulShutdownTimeoutMillis());
+        return codec;
     }
 }

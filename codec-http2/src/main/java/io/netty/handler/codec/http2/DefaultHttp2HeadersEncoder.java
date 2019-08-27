@@ -21,7 +21,7 @@ import io.netty.util.internal.UnstableApi;
 
 import static io.netty.handler.codec.http2.Http2Error.COMPRESSION_ERROR;
 import static io.netty.handler.codec.http2.Http2Exception.connectionError;
-import static io.netty.util.internal.ObjectUtil.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
 @UnstableApi
 public class DefaultHttp2HeadersEncoder implements Http2HeadersEncoder, Http2HeadersEncoder.Configuration {
@@ -43,7 +43,13 @@ public class DefaultHttp2HeadersEncoder implements Http2HeadersEncoder, Http2Hea
 
     public DefaultHttp2HeadersEncoder(SensitivityDetector sensitivityDetector, boolean ignoreMaxHeaderListSize,
                                       int dynamicTableArraySizeHint) {
-        this(sensitivityDetector, new HpackEncoder(ignoreMaxHeaderListSize, dynamicTableArraySizeHint));
+        this(sensitivityDetector, ignoreMaxHeaderListSize, dynamicTableArraySizeHint, HpackEncoder.HUFF_CODE_THRESHOLD);
+    }
+
+    public DefaultHttp2HeadersEncoder(SensitivityDetector sensitivityDetector, boolean ignoreMaxHeaderListSize,
+                                      int dynamicTableArraySizeHint, int huffCodeThreshold) {
+        this(sensitivityDetector,
+                new HpackEncoder(ignoreMaxHeaderListSize, dynamicTableArraySizeHint, huffCodeThreshold));
     }
 
     /**
@@ -51,8 +57,8 @@ public class DefaultHttp2HeadersEncoder implements Http2HeadersEncoder, Http2Hea
      * for testing but violate the RFC if used outside the scope of testing.
      */
     DefaultHttp2HeadersEncoder(SensitivityDetector sensitivityDetector, HpackEncoder hpackEncoder) {
-        this.sensitivityDetector = checkNotNull(sensitivityDetector, "sensitiveDetector");
-        this.hpackEncoder = checkNotNull(hpackEncoder, "hpackEncoder");
+        this.sensitivityDetector = requireNonNull(sensitivityDetector, "sensitiveDetector");
+        this.hpackEncoder = requireNonNull(hpackEncoder, "hpackEncoder");
     }
 
     @Override

@@ -21,15 +21,14 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelConfig;
-import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.MultithreadEventLoopGroup;
+import io.netty.channel.nio.NioHandler;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.ByteToMessageDecoder;
@@ -42,6 +41,7 @@ import java.net.SocketAddress;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Exchanger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.concurrent.TimeUnit.*;
 import static org.junit.Assert.assertTrue;
@@ -52,7 +52,7 @@ public class FlowControlHandlerTest {
 
     @BeforeClass
     public static void init() {
-        GROUP = new NioEventLoopGroup();
+        GROUP = new MultithreadEventLoopGroup(NioHandler.newFactory());
     }
 
     @AfterClass
@@ -94,7 +94,7 @@ public class FlowControlHandlerTest {
         bootstrap.group(GROUP)
             .channel(NioSocketChannel.class)
             .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 1000)
-            .handler(new ChannelInboundHandlerAdapter() {
+            .handler(new ChannelHandler() {
                 @Override
                 public void channelRead(ChannelHandlerContext ctx, Object msg) {
                     fail("In this test the client is never receiving a message from the server.");
@@ -119,7 +119,7 @@ public class FlowControlHandlerTest {
     public void testAutoReadingOn() throws Exception {
         final CountDownLatch latch = new CountDownLatch(3);
 
-        ChannelInboundHandlerAdapter handler = new ChannelInboundHandlerAdapter() {
+        ChannelHandler handler = new ChannelHandler() {
             @Override
             public void channelRead(ChannelHandlerContext ctx, Object msg) {
                 ReferenceCountUtil.release(msg);
@@ -158,10 +158,10 @@ public class FlowControlHandlerTest {
      */
     @Test
     public void testAutoReadingOff() throws Exception {
-        final Exchanger<Channel> peerRef = new Exchanger<Channel>();
+        final Exchanger<Channel> peerRef = new Exchanger<>();
         final CountDownLatch latch = new CountDownLatch(3);
 
-        ChannelInboundHandlerAdapter handler = new ChannelInboundHandlerAdapter() {
+        ChannelHandler handler = new ChannelHandler() {
             @Override
             public void channelActive(ChannelHandlerContext ctx) throws Exception {
                 peerRef.exchange(ctx.channel(), 1L, SECONDS);
@@ -207,7 +207,7 @@ public class FlowControlHandlerTest {
     public void testFlowAutoReadOn() throws Exception {
         final CountDownLatch latch = new CountDownLatch(3);
 
-        ChannelInboundHandlerAdapter handler = new ChannelDuplexHandler() {
+        ChannelHandler handler = new ChannelHandler() {
             @Override
             public void channelRead(ChannelHandlerContext ctx, Object msg) {
                 latch.countDown();
@@ -237,14 +237,14 @@ public class FlowControlHandlerTest {
      */
     @Test
     public void testFlowToggleAutoRead() throws Exception {
-        final Exchanger<Channel> peerRef = new Exchanger<Channel>();
+        final Exchanger<Channel> peerRef = new Exchanger<>();
         final CountDownLatch msgRcvLatch1 = new CountDownLatch(1);
         final CountDownLatch msgRcvLatch2 = new CountDownLatch(1);
         final CountDownLatch msgRcvLatch3 = new CountDownLatch(1);
         final CountDownLatch setAutoReadLatch1 = new CountDownLatch(1);
         final CountDownLatch setAutoReadLatch2 = new CountDownLatch(1);
 
-        ChannelInboundHandlerAdapter handler = new ChannelInboundHandlerAdapter() {
+        ChannelHandler handler = new ChannelHandler() {
             private int msgRcvCount;
             private int expectedMsgCount;
             @Override
@@ -319,12 +319,12 @@ public class FlowControlHandlerTest {
      */
     @Test
     public void testFlowAutoReadOff() throws Exception {
-        final Exchanger<Channel> peerRef = new Exchanger<Channel>();
+        final Exchanger<Channel> peerRef = new Exchanger<>();
         final CountDownLatch msgRcvLatch1 = new CountDownLatch(1);
         final CountDownLatch msgRcvLatch2 = new CountDownLatch(2);
         final CountDownLatch msgRcvLatch3 = new CountDownLatch(3);
 
-        ChannelInboundHandlerAdapter handler = new ChannelDuplexHandler() {
+        ChannelHandler handler = new ChannelHandler() {
             @Override
             public void channelActive(ChannelHandlerContext ctx) throws Exception {
                 ctx.fireChannelActive();
@@ -362,6 +362,56 @@ public class FlowControlHandlerTest {
             peer.read();
             assertTrue(msgRcvLatch3.await(1L, SECONDS));
             assertTrue(flow.isQueueEmpty());
+        } finally {
+            client.close();
+            server.close();
+        }
+    }
+
+    @Test
+    public void testReentranceNotCausesNPE() throws Throwable {
+        final Exchanger<Channel> peerRef = new Exchanger<Channel>();
+        final CountDownLatch latch = new CountDownLatch(3);
+        final AtomicReference<Throwable> causeRef = new AtomicReference<Throwable>();
+        ChannelHandler handler = new ChannelHandler() {
+            @Override
+            public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                ctx.fireChannelActive();
+                peerRef.exchange(ctx.channel(), 1L, SECONDS);
+            }
+
+            @Override
+            public void channelRead(ChannelHandlerContext ctx, Object msg) {
+                latch.countDown();
+                ctx.read();
+            }
+
+            @Override
+            public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+                causeRef.set(cause);
+            }
+        };
+
+        FlowControlHandler flow = new FlowControlHandler();
+        Channel server = newServer(false, flow, handler);
+        Channel client = newClient(server.localAddress());
+        try {
+            // The client connection on the server side
+            Channel peer = peerRef.exchange(null, 1L, SECONDS);
+
+            // Write the message
+            client.writeAndFlush(newOneMessage())
+                    .syncUninterruptibly();
+
+            // channelRead(1)
+            peer.read();
+            assertTrue(latch.await(1L, SECONDS));
+            assertTrue(flow.isQueueEmpty());
+
+            Throwable cause = causeRef.get();
+            if (cause != null) {
+                throw cause;
+            }
         } finally {
             client.close();
             server.close();

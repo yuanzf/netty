@@ -17,8 +17,7 @@ package io.netty.handler.codec.http.websocketx;
 
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.ChannelOutboundHandlerAdapter;
+import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
@@ -29,6 +28,7 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.codec.http.HttpResponseEncoder;
+import io.netty.util.CharsetUtil;
 import io.netty.util.ReferenceCountUtil;
 import org.junit.Before;
 import org.junit.Test;
@@ -42,7 +42,7 @@ import static org.junit.Assert.*;
 
 public class WebSocketServerProtocolHandlerTest {
 
-    private final Queue<FullHttpResponse> responses = new ArrayDeque<FullHttpResponse>();
+    private final Queue<FullHttpResponse> responses = new ArrayDeque<>();
 
     @Before
     public void setUp() {
@@ -59,6 +59,29 @@ public class WebSocketServerProtocolHandlerTest {
         assertEquals(SWITCHING_PROTOCOLS, response.status());
         response.release();
         assertNotNull(WebSocketServerProtocolHandler.getHandshaker(handshakerCtx.channel()));
+        assertFalse(ch.finish());
+    }
+
+    @Test
+    public void testWebSocketServerProtocolHandshakeHandlerReplacedBeforeHandshake() throws Exception {
+        EmbeddedChannel ch = createChannel(new MockOutboundHandler());
+        ChannelHandlerContext handshakerCtx = ch.pipeline().context(WebSocketServerProtocolHandshakeHandler.class);
+        ch.pipeline().addLast(new ChannelHandler() {
+            @Override
+            public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+                if (evt instanceof WebSocketServerProtocolHandler.HandshakeComplete) {
+                    // We should have removed the handler already.
+                    assertNull(ctx.pipeline().context(WebSocketServerProtocolHandshakeHandler.class));
+                }
+            }
+        });
+        writeUpgradeRequest(ch);
+
+        FullHttpResponse response = responses.remove();
+        assertEquals(SWITCHING_PROTOCOLS, response.status());
+        response.release();
+        assertNotNull(WebSocketServerProtocolHandler.getHandshaker(handshakerCtx.channel()));
+        assertFalse(ch.finish());
     }
 
     @Test
@@ -75,6 +98,7 @@ public class WebSocketServerProtocolHandlerTest {
         response = responses.remove();
         assertEquals(FORBIDDEN, response.status());
         response.release();
+        assertFalse(ch.finish());
     }
 
     @Test
@@ -94,6 +118,7 @@ public class WebSocketServerProtocolHandlerTest {
         assertEquals(BAD_REQUEST, response.status());
         assertEquals("not a WebSocket handshake request: missing upgrade", getResponseMessage(response));
         response.release();
+        assertFalse(ch.finish());
     }
 
     @Test
@@ -114,6 +139,47 @@ public class WebSocketServerProtocolHandlerTest {
         assertEquals(BAD_REQUEST, response.status());
         assertEquals("not a WebSocket request: missing key", getResponseMessage(response));
         response.release();
+        assertFalse(ch.finish());
+    }
+
+    @Test
+    public void testCreateUTF8Validator() {
+        WebSocketDecoderConfig config = WebSocketDecoderConfig.newBuilder()
+                .withUTF8Validator(true)
+                .build();
+
+        EmbeddedChannel ch = new EmbeddedChannel(
+                new WebSocketServerProtocolHandler("/test", null, false, false, 1000L, config),
+                new HttpRequestDecoder(),
+                new HttpResponseEncoder(),
+                new MockOutboundHandler());
+        writeUpgradeRequest(ch);
+
+        FullHttpResponse response = responses.remove();
+        assertEquals(SWITCHING_PROTOCOLS, response.status());
+        response.release();
+
+        assertNotNull(ch.pipeline().get(Utf8FrameValidator.class));
+    }
+
+    @Test
+    public void testDoNotCreateUTF8Validator() {
+        WebSocketDecoderConfig config = WebSocketDecoderConfig.newBuilder()
+                .withUTF8Validator(false)
+                .build();
+
+        EmbeddedChannel ch = new EmbeddedChannel(
+                new WebSocketServerProtocolHandler("/test", null, false, false, 1000L, config),
+                new HttpRequestDecoder(),
+                new HttpResponseEncoder(),
+                new MockOutboundHandler());
+        writeUpgradeRequest(ch);
+
+        FullHttpResponse response = responses.remove();
+        assertEquals(SWITCHING_PROTOCOLS, response.status());
+        response.release();
+
+        assertNull(ch.pipeline().get(Utf8FrameValidator.class));
     }
 
     @Test
@@ -121,6 +187,10 @@ public class WebSocketServerProtocolHandlerTest {
         CustomTextFrameHandler customTextFrameHandler = new CustomTextFrameHandler();
         EmbeddedChannel ch = createChannel(customTextFrameHandler);
         writeUpgradeRequest(ch);
+
+        FullHttpResponse response = responses.remove();
+        assertEquals(SWITCHING_PROTOCOLS, response.status());
+        response.release();
 
         if (ch.pipeline().context(HttpRequestDecoder.class) != null) {
             // Removing the HttpRequestDecoder because we are writing a TextWebSocketFrame and thus
@@ -131,6 +201,7 @@ public class WebSocketServerProtocolHandlerTest {
         ch.writeInbound(new TextWebSocketFrame("payload"));
 
         assertEquals("processed: payload", customTextFrameHandler.getContent());
+        assertFalse(ch.finish());
     }
 
     private EmbeddedChannel createChannel() {
@@ -151,10 +222,10 @@ public class WebSocketServerProtocolHandlerTest {
     }
 
     private static String getResponseMessage(FullHttpResponse response) {
-        return new String(response.content().array());
+        return response.content().toString(CharsetUtil.UTF_8);
     }
 
-    private class MockOutboundHandler extends ChannelOutboundHandlerAdapter {
+    private class MockOutboundHandler implements ChannelHandler {
 
         @Override
         public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
@@ -167,7 +238,7 @@ public class WebSocketServerProtocolHandlerTest {
         }
     }
 
-    private static class CustomTextFrameHandler extends ChannelInboundHandlerAdapter {
+    private static class CustomTextFrameHandler implements ChannelInboundHandler {
         private String content;
 
         @Override

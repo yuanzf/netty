@@ -27,13 +27,32 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 public class FastThreadLocalTest {
     @Before
     public void setUp() {
         FastThreadLocal.removeAll();
         assertThat(FastThreadLocal.size(), is(0));
+    }
+
+    @Test
+    public void testGetIfExists() {
+        FastThreadLocal<Boolean> threadLocal = new FastThreadLocal<Boolean>() {
+            @Override
+            protected Boolean initialValue() {
+                return Boolean.TRUE;
+            }
+        };
+
+        assertNull(threadLocal.getIfExists());
+        assertTrue(threadLocal.get());
+        assertTrue(threadLocal.getIfExists());
+
+        FastThreadLocal.removeAll();
+        assertNull(threadLocal.getIfExists());
     }
 
     @Test(timeout = 10000)
@@ -58,7 +77,7 @@ public class FastThreadLocalTest {
 
     @Test(timeout = 10000)
     public void testRemoveAllFromFTLThread() throws Throwable {
-        final AtomicReference<Throwable> throwable = new AtomicReference<Throwable>();
+        final AtomicReference<Throwable> throwable = new AtomicReference<>();
         final Thread thread = new FastThreadLocalThread() {
             @Override
             public void run() {
@@ -81,15 +100,12 @@ public class FastThreadLocalTest {
 
     @Test
     public void testMultipleSetRemove() throws Exception {
-        final FastThreadLocal<String> threadLocal = new FastThreadLocal<String>();
-        final Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                threadLocal.set("1");
-                threadLocal.remove();
-                threadLocal.set("2");
-                threadLocal.remove();
-            }
+        final FastThreadLocal<String> threadLocal = new FastThreadLocal<>();
+        final Runnable runnable = () -> {
+            threadLocal.set("1");
+            threadLocal.remove();
+            threadLocal.set("2");
+            threadLocal.remove();
         };
 
         final int sizeWhenStart = ObjectCleaner.getLiveSetCount();
@@ -108,20 +124,17 @@ public class FastThreadLocalTest {
 
     @Test
     public void testMultipleSetRemove_multipleThreadLocal() throws Exception {
-        final FastThreadLocal<String> threadLocal = new FastThreadLocal<String>();
-        final FastThreadLocal<String> threadLocal2 = new FastThreadLocal<String>();
-        final Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                threadLocal.set("1");
-                threadLocal.remove();
-                threadLocal.set("2");
-                threadLocal.remove();
-                threadLocal2.set("1");
-                threadLocal2.remove();
-                threadLocal2.set("2");
-                threadLocal2.remove();
-            }
+        final FastThreadLocal<String> threadLocal = new FastThreadLocal<>();
+        final FastThreadLocal<String> threadLocal2 = new FastThreadLocal<>();
+        final Runnable runnable = () -> {
+            threadLocal.set("1");
+            threadLocal.remove();
+            threadLocal.set("2");
+            threadLocal.remove();
+            threadLocal2.set("1");
+            threadLocal2.remove();
+            threadLocal2.set("2");
+            threadLocal2.remove();
         };
 
         final int sizeWhenStart = ObjectCleaner.getLiveSetCount();
@@ -165,16 +178,13 @@ public class FastThreadLocalTest {
         final TestFastThreadLocal threadLocal = new TestFastThreadLocal();
         final TestFastThreadLocal threadLocal2 = new TestFastThreadLocal();
 
-        Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                if (callGet) {
-                    assertEquals(Thread.currentThread().getName(), threadLocal.get());
-                    assertEquals(Thread.currentThread().getName(), threadLocal2.get());
-                } else {
-                    threadLocal.set(Thread.currentThread().getName());
-                    threadLocal2.set(Thread.currentThread().getName());
-                }
+        Runnable runnable = () -> {
+            if (callGet) {
+                assertEquals(Thread.currentThread().getName(), threadLocal.get());
+                assertEquals(Thread.currentThread().getName(), threadLocal2.get());
+            } else {
+                threadLocal.set(Thread.currentThread().getName());
+                threadLocal2.set(Thread.currentThread().getName());
             }
         };
         Thread thread = fastThreadLocal ? new FastThreadLocalThread(runnable) : new Thread(runnable);
@@ -199,7 +209,7 @@ public class FastThreadLocalTest {
 
     private static final class TestFastThreadLocal extends FastThreadLocal<String> {
 
-        final AtomicReference<String> onRemovalCalled = new AtomicReference<String>();
+        final AtomicReference<String> onRemovalCalled = new AtomicReference<>();
 
         @Override
         protected String initialValue() throws Exception {

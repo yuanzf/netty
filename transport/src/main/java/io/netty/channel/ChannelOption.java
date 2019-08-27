@@ -15,6 +15,8 @@
  */
 package io.netty.channel;
 
+import static java.util.Objects.requireNonNull;
+
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.util.AbstractConstant;
 import io.netty.util.ConstantPool;
@@ -35,7 +37,7 @@ public class ChannelOption<T> extends AbstractConstant<ChannelOption<T>> {
     private static final ConstantPool<ChannelOption<Object>> pool = new ConstantPool<ChannelOption<Object>>() {
         @Override
         protected ChannelOption<Object> newConstant(int id, String name) {
-            return new ChannelOption<Object>(id, name);
+            return new ChannelOption<>(id, name);
         }
     };
 
@@ -65,7 +67,10 @@ public class ChannelOption<T> extends AbstractConstant<ChannelOption<T>> {
     /**
      * Creates a new {@link ChannelOption} for the given {@code name} or fail with an
      * {@link IllegalArgumentException} if a {@link ChannelOption} for the given {@code name} exists.
+     *
+     * @deprecated use {@link #valueOf(String)}.
      */
+    @Deprecated
     @SuppressWarnings("unchecked")
     public static <T> ChannelOption<T> newInstance(String name) {
         return (ChannelOption<T>) pool.newInstance(name);
@@ -126,9 +131,6 @@ public class ChannelOption<T> extends AbstractConstant<ChannelOption<T>> {
     public static final ChannelOption<Boolean> DATAGRAM_CHANNEL_ACTIVE_ON_REGISTRATION =
             valueOf("DATAGRAM_CHANNEL_ACTIVE_ON_REGISTRATION");
 
-    public static final ChannelOption<Boolean> SINGLE_EVENTEXECUTOR_PER_GROUP =
-            valueOf("SINGLE_EVENTEXECUTOR_PER_GROUP");
-
     /**
      * Creates a new {@link ChannelOption} with the specified unique {@code name}.
      */
@@ -146,8 +148,6 @@ public class ChannelOption<T> extends AbstractConstant<ChannelOption<T>> {
      * may override this for special checks.
      */
     public void validate(T value) {
-        if (value == null) {
-            throw new NullPointerException("value");
-        }
+        requireNonNull(value, "value");
     }
 }

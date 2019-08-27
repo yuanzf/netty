@@ -99,6 +99,11 @@ class WrappedCompositeByteBuf extends CompositeByteBuf {
     }
 
     @Override
+    public int maxFastWritableBytes() {
+        return wrapped.maxFastWritableBytes();
+    }
+
+    @Override
     public int ensureWritable(int minWritableBytes, boolean force) {
         return wrapped.ensureWritable(minWritableBytes, force);
     }
@@ -424,8 +429,8 @@ class WrappedCompositeByteBuf extends CompositeByteBuf {
     }
 
     @Override
-    int internalRefCnt() {
-        return wrapped.internalRefCnt();
+    final boolean isAccessible() {
+        return wrapped.isAccessible();
     }
 
     @Override
@@ -545,6 +550,12 @@ class WrappedCompositeByteBuf extends CompositeByteBuf {
     @Override
     public CompositeByteBuf addComponent(boolean increaseWriterIndex, int cIndex, ByteBuf buffer) {
         wrapped.addComponent(increaseWriterIndex, cIndex, buffer);
+        return this;
+    }
+
+    @Override
+    public CompositeByteBuf addFlattenedComponents(boolean increaseWriterIndex, ByteBuf buffer) {
+        wrapped.addFlattenedComponents(increaseWriterIndex, buffer);
         return this;
     }
 
@@ -918,30 +929,6 @@ class WrappedCompositeByteBuf extends CompositeByteBuf {
     @Override
     public final CompositeByteBuf clear() {
         wrapped.clear();
-        return this;
-    }
-
-    @Override
-    public final CompositeByteBuf markReaderIndex() {
-        wrapped.markReaderIndex();
-        return this;
-    }
-
-    @Override
-    public final CompositeByteBuf resetReaderIndex() {
-        wrapped.resetReaderIndex();
-        return this;
-    }
-
-    @Override
-    public final CompositeByteBuf markWriterIndex() {
-        wrapped.markWriterIndex();
-        return this;
-    }
-
-    @Override
-    public final CompositeByteBuf resetWriterIndex() {
-        wrapped.resetWriterIndex();
         return this;
     }
 

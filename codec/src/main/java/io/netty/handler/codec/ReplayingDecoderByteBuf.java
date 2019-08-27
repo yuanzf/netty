@@ -15,6 +15,8 @@
  */
 package io.netty.handler.codec;
 
+import static java.util.Objects.requireNonNull;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.SwappedByteBuf;
@@ -455,26 +457,13 @@ final class ReplayingDecoderByteBuf extends ByteBuf {
     }
 
     @Override
-    public ByteBuf markReaderIndex() {
-        buffer.markReaderIndex();
-        return this;
-    }
-
-    @Override
-    public ByteBuf markWriterIndex() {
-        throw reject();
-    }
-
-    @Override
     public ByteOrder order() {
         return buffer.order();
     }
 
     @Override
     public ByteBuf order(ByteOrder endianness) {
-        if (endianness == null) {
-            throw new NullPointerException("endianness");
-        }
+        requireNonNull(endianness, "endianness");
         if (endianness == order()) {
             return this;
         }
@@ -488,12 +477,12 @@ final class ReplayingDecoderByteBuf extends ByteBuf {
 
     @Override
     public boolean isReadable() {
-        return terminated? buffer.isReadable() : true;
+        return !terminated || buffer.isReadable();
     }
 
     @Override
     public boolean isReadable(int size) {
-        return terminated? buffer.isReadable(size) : true;
+        return !terminated || buffer.isReadable(size);
     }
 
     @Override
@@ -711,17 +700,6 @@ final class ReplayingDecoderByteBuf extends ByteBuf {
     public CharSequence readCharSequence(int length, Charset charset) {
         checkReadableBytes(length);
         return buffer.readCharSequence(length, charset);
-    }
-
-    @Override
-    public ByteBuf resetReaderIndex() {
-        buffer.resetReaderIndex();
-        return this;
-    }
-
-    @Override
-    public ByteBuf resetWriterIndex() {
-        throw reject();
     }
 
     @Override

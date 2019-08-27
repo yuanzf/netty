@@ -15,9 +15,12 @@
  */
 package io.netty.handler.codec.http;
 
+import static java.util.Objects.requireNonNull;
+
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.Charset;
+import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -65,16 +68,9 @@ public final class HttpUtil {
      * {@link HttpVersion#isKeepAliveDefault()}.
      */
     public static boolean isKeepAlive(HttpMessage message) {
-        CharSequence connection = message.headers().get(HttpHeaderNames.CONNECTION);
-        if (HttpHeaderValues.CLOSE.contentEqualsIgnoreCase(connection)) {
-            return false;
-        }
-
-        if (message.protocolVersion().isKeepAliveDefault()) {
-            return !HttpHeaderValues.CLOSE.contentEqualsIgnoreCase(connection);
-        } else {
-            return HttpHeaderValues.KEEP_ALIVE.contentEqualsIgnoreCase(connection);
-        }
+        return !message.headers().containsValue(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE, true) &&
+               (message.protocolVersion().isKeepAliveDefault() ||
+                message.headers().containsValue(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE, true));
     }
 
     /**
@@ -325,7 +321,7 @@ public final class HttpUtil {
             if (encodings.isEmpty()) {
                 return;
             }
-            List<CharSequence> values = new ArrayList<CharSequence>(encodings);
+            List<CharSequence> values = new ArrayList<>(encodings);
             Iterator<CharSequence> valuesIt = values.iterator();
             while (valuesIt.hasNext()) {
                 CharSequence value = valuesIt.next();
@@ -398,7 +394,7 @@ public final class HttpUtil {
             if (charsetCharSequence != null) {
                 try {
                     return Charset.forName(charsetCharSequence.toString());
-                } catch (UnsupportedCharsetException ignored) {
+                } catch (UnsupportedCharsetException | IllegalCharsetNameException ignored) {
                     return defaultCharset;
                 }
             } else {
@@ -455,9 +451,7 @@ public final class HttpUtil {
      * @throws NullPointerException in case if {@code contentTypeValue == null}
      */
     public static CharSequence getCharsetAsSequence(CharSequence contentTypeValue) {
-        if (contentTypeValue == null) {
-            throw new NullPointerException("contentTypeValue");
-        }
+        requireNonNull(contentTypeValue, "contentTypeValue");
 
         int indexOfCharset = AsciiString.indexOfIgnoreCaseAscii(contentTypeValue, CHARSET_EQUALS, 0);
         if (indexOfCharset == AsciiString.INDEX_NOT_FOUND) {
@@ -511,9 +505,7 @@ public final class HttpUtil {
      * @throws NullPointerException in case if {@code contentTypeValue == null}
      */
     public static CharSequence getMimeType(CharSequence contentTypeValue) {
-        if (contentTypeValue == null) {
-            throw new NullPointerException("contentTypeValue");
-        }
+        requireNonNull(contentTypeValue, "contentTypeValue");
 
         int indexOfSemicolon = AsciiString.indexOfIgnoreCaseAscii(contentTypeValue, SEMICOLON, 0);
         if (indexOfSemicolon != AsciiString.INDEX_NOT_FOUND) {

@@ -19,8 +19,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufOutputStream;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
-import io.netty.util.Attribute;
-import io.netty.util.AttributeKey;
 
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -73,11 +71,10 @@ public class CompatibleObjectEncoder extends MessageToByteEncoder<Serializable> 
 
     @Override
     protected void encode(ChannelHandlerContext ctx, Serializable msg, ByteBuf out) throws Exception {
-        ObjectOutputStream oos = newObjectOutputStream(new ByteBufOutputStream(out));
-        try {
+        try (ObjectOutputStream oos = newObjectOutputStream(new ByteBufOutputStream(out))) {
             if (resetInterval != 0) {
                 // Resetting will prevent OOM on the receiving side.
-                writtenObjects ++;
+                writtenObjects++;
                 if (writtenObjects % resetInterval == 0) {
                     oos.reset();
                 }
@@ -85,8 +82,6 @@ public class CompatibleObjectEncoder extends MessageToByteEncoder<Serializable> 
 
             oos.writeObject(msg);
             oos.flush();
-        } finally {
-            oos.close();
         }
     }
 }

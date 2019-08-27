@@ -15,15 +15,12 @@
  */
 package io.netty.handler.codec.http.websocketx;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-import io.netty.handler.codec.base64.Base64;
-import io.netty.util.CharsetUtil;
 import io.netty.util.concurrent.FastThreadLocal;
-import io.netty.util.internal.PlatformDependent;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * A utility class mainly for use by web sockets
@@ -91,13 +88,8 @@ final class WebSocketUtil {
      * @return An encoded string containing the data
      */
     static String base64(byte[] data) {
-        ByteBuf encodedData = Unpooled.wrappedBuffer(data);
-        ByteBuf encoded = Base64.encode(encodedData);
-        String encodedString = encoded.toString(CharsetUtil.UTF_8);
-        encoded.release();
-        return encodedString;
+        return Base64.getEncoder().encodeToString(data);
     }
-
     /**
      * Creates an arbitrary number of random bytes
      *
@@ -106,41 +98,8 @@ final class WebSocketUtil {
      */
     static byte[] randomBytes(int size) {
         byte[] bytes = new byte[size];
-        PlatformDependent.threadLocalRandom().nextBytes(bytes);
+        ThreadLocalRandom.current().nextBytes(bytes);
         return bytes;
-    }
-
-    /**
-     * Generates a pseudo-random number
-     *
-     * @param minimum The minimum allowable value
-     * @param maximum The maximum allowable value
-     * @return A pseudo-random number
-     */
-    static int randomNumber(int minimum, int maximum) {
-        assert minimum < maximum;
-        double fraction = PlatformDependent.threadLocalRandom().nextDouble();
-
-        // the idea here is that nextDouble gives us a random value
-        //
-        //              0 <= fraction <= 1
-        //
-        // the distance from min to max declared as
-        //
-        //              dist = max - min
-        //
-        // satisfies the following
-        //
-        //              min + dist = max
-        //
-        // taking into account
-        //
-        //         0 <= fraction * dist <= dist
-        //
-        // we've got
-        //
-        //       min <= min + fraction * dist <= max
-        return (int) (minimum + fraction * (maximum - minimum));
     }
 
     /**

@@ -30,14 +30,13 @@ import static io.netty.channel.ChannelOption.CONNECT_TIMEOUT_MILLIS;
 import static io.netty.channel.ChannelOption.MAX_MESSAGES_PER_READ;
 import static io.netty.channel.ChannelOption.MESSAGE_SIZE_ESTIMATOR;
 import static io.netty.channel.ChannelOption.RCVBUF_ALLOCATOR;
-import static io.netty.channel.ChannelOption.SINGLE_EVENTEXECUTOR_PER_GROUP;
 import static io.netty.channel.ChannelOption.WRITE_BUFFER_HIGH_WATER_MARK;
 import static io.netty.channel.ChannelOption.WRITE_BUFFER_LOW_WATER_MARK;
 import static io.netty.channel.ChannelOption.WRITE_BUFFER_WATER_MARK;
 import static io.netty.channel.ChannelOption.WRITE_SPIN_COUNT;
-import static io.netty.util.internal.ObjectUtil.checkNotNull;
 import static io.netty.util.internal.ObjectUtil.checkPositive;
 import static io.netty.util.internal.ObjectUtil.checkPositiveOrZero;
+import static java.util.Objects.requireNonNull;
 
 /**
  * The default {@link ChannelConfig} implementation.
@@ -83,14 +82,13 @@ public class DefaultChannelConfig implements ChannelConfig {
                 null,
                 CONNECT_TIMEOUT_MILLIS, MAX_MESSAGES_PER_READ, WRITE_SPIN_COUNT,
                 ALLOCATOR, AUTO_READ, AUTO_CLOSE, RCVBUF_ALLOCATOR, WRITE_BUFFER_HIGH_WATER_MARK,
-                WRITE_BUFFER_LOW_WATER_MARK, WRITE_BUFFER_WATER_MARK, MESSAGE_SIZE_ESTIMATOR,
-                SINGLE_EVENTEXECUTOR_PER_GROUP);
+                WRITE_BUFFER_LOW_WATER_MARK, WRITE_BUFFER_WATER_MARK, MESSAGE_SIZE_ESTIMATOR);
     }
 
     protected Map<ChannelOption<?>, Object> getOptions(
             Map<ChannelOption<?>, Object> result, ChannelOption<?>... options) {
         if (result == null) {
-            result = new IdentityHashMap<ChannelOption<?>, Object>();
+            result = new IdentityHashMap<>();
         }
         for (ChannelOption<?> o: options) {
             result.put(o, getOption(o));
@@ -101,9 +99,7 @@ public class DefaultChannelConfig implements ChannelConfig {
     @SuppressWarnings("unchecked")
     @Override
     public boolean setOptions(Map<ChannelOption<?>, ?> options) {
-        if (options == null) {
-            throw new NullPointerException("options");
-        }
+        requireNonNull(options, "options");
 
         boolean setAllOptions = true;
         for (Entry<ChannelOption<?>, ?> e: options.entrySet()) {
@@ -118,9 +114,7 @@ public class DefaultChannelConfig implements ChannelConfig {
     @Override
     @SuppressWarnings({ "unchecked", "deprecation" })
     public <T> T getOption(ChannelOption<T> option) {
-        if (option == null) {
-            throw new NullPointerException("option");
-        }
+        requireNonNull(option, "option");
 
         if (option == CONNECT_TIMEOUT_MILLIS) {
             return (T) Integer.valueOf(getConnectTimeoutMillis());
@@ -155,9 +149,6 @@ public class DefaultChannelConfig implements ChannelConfig {
         if (option == MESSAGE_SIZE_ESTIMATOR) {
             return (T) getMessageSizeEstimator();
         }
-        if (option == SINGLE_EVENTEXECUTOR_PER_GROUP) {
-            return (T) Boolean.valueOf(getPinEventExecutorPerGroup());
-        }
         return null;
     }
 
@@ -188,8 +179,6 @@ public class DefaultChannelConfig implements ChannelConfig {
             setWriteBufferWaterMark((WriteBufferWaterMark) value);
         } else if (option == MESSAGE_SIZE_ESTIMATOR) {
             setMessageSizeEstimator((MessageSizeEstimator) value);
-        } else if (option == SINGLE_EVENTEXECUTOR_PER_GROUP) {
-            setPinEventExecutorPerGroup((Boolean) value);
         } else {
             return false;
         }
@@ -198,9 +187,7 @@ public class DefaultChannelConfig implements ChannelConfig {
     }
 
     protected <T> void validate(ChannelOption<T> option, T value) {
-        if (option == null) {
-            throw new NullPointerException("option");
-        }
+        requireNonNull(option, "option");
         option.validate(value);
     }
 
@@ -279,9 +266,7 @@ public class DefaultChannelConfig implements ChannelConfig {
 
     @Override
     public ChannelConfig setAllocator(ByteBufAllocator allocator) {
-        if (allocator == null) {
-            throw new NullPointerException("allocator");
-        }
+        requireNonNull(allocator, "allocator");
         this.allocator = allocator;
         return this;
     }
@@ -294,7 +279,7 @@ public class DefaultChannelConfig implements ChannelConfig {
 
     @Override
     public ChannelConfig setRecvByteBufAllocator(RecvByteBufAllocator allocator) {
-        rcvBufAllocator = checkNotNull(allocator, "allocator");
+        rcvBufAllocator = requireNonNull(allocator, "allocator");
         return this;
     }
 
@@ -307,9 +292,8 @@ public class DefaultChannelConfig implements ChannelConfig {
     private void setRecvByteBufAllocator(RecvByteBufAllocator allocator, ChannelMetadata metadata) {
         if (allocator instanceof MaxMessagesRecvByteBufAllocator) {
             ((MaxMessagesRecvByteBufAllocator) allocator).maxMessagesPerRead(metadata.defaultMaxMessagesPerRead());
-        } else if (allocator == null) {
-            throw new NullPointerException("allocator");
         }
+        requireNonNull(allocator, "allocator");
         setRecvByteBufAllocator(allocator);
     }
 
@@ -394,7 +378,7 @@ public class DefaultChannelConfig implements ChannelConfig {
 
     @Override
     public ChannelConfig setWriteBufferWaterMark(WriteBufferWaterMark writeBufferWaterMark) {
-        this.writeBufferWaterMark = checkNotNull(writeBufferWaterMark, "writeBufferWaterMark");
+        this.writeBufferWaterMark = requireNonNull(writeBufferWaterMark, "writeBufferWaterMark");
         return this;
     }
 
@@ -410,20 +394,8 @@ public class DefaultChannelConfig implements ChannelConfig {
 
     @Override
     public ChannelConfig setMessageSizeEstimator(MessageSizeEstimator estimator) {
-        if (estimator == null) {
-            throw new NullPointerException("estimator");
-        }
+        requireNonNull(estimator, "estimator");
         msgSizeEstimator = estimator;
         return this;
     }
-
-    private ChannelConfig setPinEventExecutorPerGroup(boolean pinEventExecutor) {
-        this.pinEventExecutor = pinEventExecutor;
-        return this;
-    }
-
-    private boolean getPinEventExecutorPerGroup() {
-        return pinEventExecutor;
-    }
-
 }

@@ -20,10 +20,9 @@ import io.netty.buffer.CompositeByteBuf;
 import io.netty.handler.codec.http.HttpConstants;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
@@ -32,6 +31,7 @@ import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
 import static io.netty.buffer.Unpooled.buffer;
 import static io.netty.buffer.Unpooled.compositeBuffer;
 import static io.netty.buffer.Unpooled.wrappedBuffer;
+import static java.util.Objects.requireNonNull;
 
 /**
  * Abstract Memory HttpData implementation
@@ -47,9 +47,7 @@ public abstract class AbstractMemoryHttpData extends AbstractHttpData {
 
     @Override
     public void setContent(ByteBuf buffer) throws IOException {
-        if (buffer == null) {
-            throw new NullPointerException("buffer");
-        }
+        requireNonNull(buffer, "buffer");
         long localsize = buffer.readableBytes();
         checkSize(localsize);
         if (definedSize > 0 && definedSize < localsize) {
@@ -66,9 +64,7 @@ public abstract class AbstractMemoryHttpData extends AbstractHttpData {
 
     @Override
     public void setContent(InputStream inputStream) throws IOException {
-        if (inputStream == null) {
-            throw new NullPointerException("inputStream");
-        }
+        requireNonNull(inputStream, "inputStream");
         ByteBuf buffer = buffer();
         byte[] bytes = new byte[4096 * 4];
         int read = inputStream.read(bytes);
@@ -115,24 +111,20 @@ public abstract class AbstractMemoryHttpData extends AbstractHttpData {
         if (last) {
             setCompleted();
         } else {
-            if (buffer == null) {
-                throw new NullPointerException("buffer");
-            }
+            requireNonNull(buffer, "buffer");
         }
     }
 
     @Override
     public void setContent(File file) throws IOException {
-        if (file == null) {
-            throw new NullPointerException("file");
-        }
+        requireNonNull(file, "file");
         long newsize = file.length();
         if (newsize > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("File too big to be loaded in memory");
         }
         checkSize(newsize);
-        FileInputStream inputStream = new FileInputStream(file);
-        FileChannel fileChannel = inputStream.getChannel();
+        RandomAccessFile accessFile = new RandomAccessFile(file, "r");
+        FileChannel fileChannel = accessFile.getChannel();
         byte[] array = new byte[(int) newsize];
         ByteBuffer byteBuffer = ByteBuffer.wrap(array);
         int read = 0;
@@ -140,7 +132,7 @@ public abstract class AbstractMemoryHttpData extends AbstractHttpData {
             read += fileChannel.read(byteBuffer);
         }
         fileChannel.close();
-        inputStream.close();
+        accessFile.close();
         byteBuffer.flip();
         if (byteBuf != null) {
             byteBuf.release();
@@ -221,9 +213,7 @@ public abstract class AbstractMemoryHttpData extends AbstractHttpData {
 
     @Override
     public boolean renameTo(File dest) throws IOException {
-        if (dest == null) {
-            throw new NullPointerException("dest");
-        }
+        requireNonNull(dest, "dest");
         if (byteBuf == null) {
             // empty file
             if (!dest.createNewFile()) {
@@ -232,8 +222,8 @@ public abstract class AbstractMemoryHttpData extends AbstractHttpData {
             return true;
         }
         int length = byteBuf.readableBytes();
-        FileOutputStream outputStream = new FileOutputStream(dest);
-        FileChannel fileChannel = outputStream.getChannel();
+        RandomAccessFile accessFile = new RandomAccessFile(dest, "rw");
+        FileChannel fileChannel = accessFile.getChannel();
         int written = 0;
         if (byteBuf.nioBufferCount() == 1) {
             ByteBuffer byteBuffer = byteBuf.nioBuffer();
@@ -249,7 +239,7 @@ public abstract class AbstractMemoryHttpData extends AbstractHttpData {
 
         fileChannel.force(false);
         fileChannel.close();
-        outputStream.close();
+        accessFile.close();
         return written == length;
     }
 

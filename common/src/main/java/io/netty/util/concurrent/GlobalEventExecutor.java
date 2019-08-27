@@ -15,6 +15,9 @@
  */
 package io.netty.util.concurrent;
 
+import static java.util.Objects.requireNonNull;
+
+import io.netty.util.internal.ThreadExecutorMap;
 import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 
@@ -34,37 +37,41 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * task pending in the task queue for 1 second.  Please note it is not scalable to schedule large number of tasks to
  * this executor; use a dedicated executor.
  */
-public final class GlobalEventExecutor extends AbstractScheduledEventExecutor {
+public final class GlobalEventExecutor extends AbstractScheduledEventExecutor implements OrderedEventExecutor {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(GlobalEventExecutor.class);
 
     private static final long SCHEDULE_QUIET_PERIOD_INTERVAL = TimeUnit.SECONDS.toNanos(1);
 
-    public static final GlobalEventExecutor INSTANCE = new GlobalEventExecutor();
+    private static final RunnableScheduledFutureAdapter<Void> QUIET_PERIOD_TASK;
+    public static final GlobalEventExecutor INSTANCE;
 
-    final BlockingQueue<Runnable> taskQueue = new LinkedBlockingQueue<Runnable>();
-    final ScheduledFutureTask<Void> quietPeriodTask = new ScheduledFutureTask<Void>(
-            this, Executors.<Void>callable(new Runnable() {
-        @Override
-        public void run() {
-            // NOOP
-        }
-    }, null), ScheduledFutureTask.deadlineNanos(SCHEDULE_QUIET_PERIOD_INTERVAL), -SCHEDULE_QUIET_PERIOD_INTERVAL);
+    static {
+        INSTANCE = new GlobalEventExecutor();
+        QUIET_PERIOD_TASK = new RunnableScheduledFutureAdapter<>(
+                INSTANCE, INSTANCE.newPromise(), Executors.callable(() -> {
+                    // NOOP
+                }, null), deadlineNanos(SCHEDULE_QUIET_PERIOD_INTERVAL), -SCHEDULE_QUIET_PERIOD_INTERVAL);
+
+        INSTANCE.scheduledTaskQueue().add(QUIET_PERIOD_TASK);
+    }
+
+    private final BlockingQueue<Runnable> taskQueue = new LinkedBlockingQueue<Runnable>();
 
     // because the GlobalEventExecutor is a singleton, tasks submitted to it can come from arbitrary threads and this
     // can trigger the creation of a thread from arbitrary thread groups; for this reason, the thread factory must not
     // be sticky about its thread group
     // visible for testing
-    final ThreadFactory threadFactory =
-            new DefaultThreadFactory(DefaultThreadFactory.toPoolName(getClass()), false, Thread.NORM_PRIORITY, null);
+    final ThreadFactory threadFactory;
     private final TaskRunner taskRunner = new TaskRunner();
     private final AtomicBoolean started = new AtomicBoolean();
     volatile Thread thread;
 
-    private final Future<?> terminationFuture = new FailedFuture<Object>(this, new UnsupportedOperationException());
+    private final Future<?> terminationFuture = new FailedFuture<>(this, new UnsupportedOperationException());
 
     private GlobalEventExecutor() {
-        scheduledTaskQueue().add(quietPeriodTask);
+        threadFactory = ThreadExecutorMap.apply(new DefaultThreadFactory(
+                DefaultThreadFactory.toPoolName(getClass()), false, Thread.NORM_PRIORITY, null), this);
     }
 
     /**
@@ -72,10 +79,10 @@ public final class GlobalEventExecutor extends AbstractScheduledEventExecutor {
      *
      * @return {@code null} if the executor thread has been interrupted or waken up.
      */
-    Runnable takeTask() {
+    private Runnable takeTask() {
         BlockingQueue<Runnable> taskQueue = this.taskQueue;
         for (;;) {
-            ScheduledFutureTask<?> scheduledTask = peekScheduledTask();
+            RunnableScheduledFuture<?> scheduledTask = peekScheduledTask();
             if (scheduledTask == null) {
                 Runnable task = null;
                 try {
@@ -134,9 +141,7 @@ public final class GlobalEventExecutor extends AbstractScheduledEventExecutor {
      * before.
      */
     private void addTask(Runnable task) {
-        if (task == null) {
-            throw new NullPointerException("task");
-        }
+        requireNonNull(task, "task");
         taskQueue.add(task);
     }
 
@@ -190,9 +195,7 @@ public final class GlobalEventExecutor extends AbstractScheduledEventExecutor {
      * @return {@code true} if and only if the worker thread has been terminated
      */
     public boolean awaitInactivity(long timeout, TimeUnit unit) throws InterruptedException {
-        if (unit == null) {
-            throw new NullPointerException("unit");
-        }
+        requireNonNull(unit, "unit");
 
         final Thread thread = this.thread;
         if (thread == null) {
@@ -204,9 +207,7 @@ public final class GlobalEventExecutor extends AbstractScheduledEventExecutor {
 
     @Override
     public void execute(Runnable task) {
-        if (task == null) {
-            throw new NullPointerException("task");
-        }
+        requireNonNull(task, "task");
 
         addTask(task);
         if (!inEventLoop()) {
@@ -222,12 +223,9 @@ public final class GlobalEventExecutor extends AbstractScheduledEventExecutor {
             // See:
             // - https://github.com/netty/netty/issues/7290
             // - https://bugs.openjdk.java.net/browse/JDK-7008595
-            AccessController.doPrivileged(new PrivilegedAction<Void>() {
-                @Override
-                public Void run() {
-                    t.setContextClassLoader(null);
-                    return null;
-                }
+            AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
+                t.setContextClassLoader(null);
+                return null;
             });
 
             // Set the thread before starting it as otherwise inEventLoop() may return false and so produce
@@ -250,14 +248,14 @@ public final class GlobalEventExecutor extends AbstractScheduledEventExecutor {
                         logger.warn("Unexpected exception from the global event executor: ", t);
                     }
 
-                    if (task != quietPeriodTask) {
+                    if (task != QUIET_PERIOD_TASK) {
                         continue;
                     }
                 }
 
-                Queue<ScheduledFutureTask<?>> scheduledTaskQueue = GlobalEventExecutor.this.scheduledTaskQueue;
+                Queue<RunnableScheduledFutureNode<?>> scheduledTaskQueue = scheduledTaskQueue();
                 // Terminate if there is no task in the queue (except the noop task).
-                if (taskQueue.isEmpty() && (scheduledTaskQueue == null || scheduledTaskQueue.size() == 1)) {
+                if (taskQueue.isEmpty() && scheduledTaskQueue.size() <= 1) {
                     // Mark the current thread as stopped.
                     // The following CAS must always success and must be uncontended,
                     // because only one thread should be running at the same time.
@@ -265,7 +263,7 @@ public final class GlobalEventExecutor extends AbstractScheduledEventExecutor {
                     assert stopped;
 
                     // Check if there are pending entries added by execute() or schedule*() while we do CAS above.
-                    if (taskQueue.isEmpty() && (scheduledTaskQueue == null || scheduledTaskQueue.size() == 1)) {
+                    if (taskQueue.isEmpty() && scheduledTaskQueue.size() <= 1) {
                         // A) No new task was added and thus there's nothing to handle
                         //    -> safe to terminate because there's nothing left to do
                         // B) A new thread started and handled all the new tasks.

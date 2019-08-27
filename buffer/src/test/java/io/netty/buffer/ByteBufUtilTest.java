@@ -142,14 +142,14 @@ public class ByteBufUtilTest {
         ByteBuf buf = Unpooled.buffer(2).order(ByteOrder.BIG_ENDIAN);
         ByteBufUtil.writeShortBE(buf, expected);
         assertEquals(expected, buf.readShort());
-        buf.resetReaderIndex();
+        buf.readerIndex(0);
         assertEquals(ByteBufUtil.swapShort((short) expected), buf.readShortLE());
         buf.release();
 
         buf = Unpooled.buffer(2).order(ByteOrder.LITTLE_ENDIAN);
         ByteBufUtil.writeShortBE(buf, expected);
         assertEquals((short) expected, buf.readShortLE());
-        buf.resetReaderIndex();
+        buf.readerIndex(0);
         assertEquals(ByteBufUtil.swapShort((short) expected), buf.readShort());
         buf.release();
     }
@@ -162,14 +162,14 @@ public class ByteBufUtilTest {
         ByteBuf buf = Unpooled.wrappedBuffer(new byte[2]).order(ByteOrder.BIG_ENDIAN);
         ByteBufUtil.setShortBE(buf, 0, shortValue);
         assertEquals(shortValue, buf.readShort());
-        buf.resetReaderIndex();
+        buf.readerIndex(0);
         assertEquals(ByteBufUtil.swapShort((short) shortValue), buf.readShortLE());
         buf.release();
 
         buf = Unpooled.wrappedBuffer(new byte[2]).order(ByteOrder.LITTLE_ENDIAN);
         ByteBufUtil.setShortBE(buf, 0, shortValue);
         assertEquals((short) shortValue, buf.readShortLE());
-        buf.resetReaderIndex();
+        buf.readerIndex(0);
         assertEquals(ByteBufUtil.swapShort((short) shortValue), buf.readShort());
         buf.release();
     }
@@ -182,14 +182,14 @@ public class ByteBufUtilTest {
         ByteBuf buf = Unpooled.buffer(4).order(ByteOrder.BIG_ENDIAN);
         ByteBufUtil.writeMediumBE(buf, mediumValue);
         assertEquals(mediumValue, buf.readMedium());
-        buf.resetReaderIndex();
+        buf.readerIndex(0);
         assertEquals(ByteBufUtil.swapMedium(mediumValue), buf.readMediumLE());
         buf.release();
 
         buf = Unpooled.buffer(4).order(ByteOrder.LITTLE_ENDIAN);
         ByteBufUtil.writeMediumBE(buf, mediumValue);
         assertEquals(mediumValue, buf.readMediumLE());
-        buf.resetReaderIndex();
+        buf.readerIndex(0);
         assertEquals(ByteBufUtil.swapMedium(mediumValue), buf.readMedium());
         buf.release();
     }
@@ -511,6 +511,111 @@ public class ByteBufUtilTest {
     }
 
     @Test
+    public void testWriteUtf8Subsequence() {
+        String usAscii = "Some UTF-8 like äÄ∏ŒŒ";
+        ByteBuf buf = Unpooled.buffer(16);
+        buf.writeBytes(usAscii.substring(5, 18).getBytes(CharsetUtil.UTF_8));
+        ByteBuf buf2 = Unpooled.buffer(16);
+        ByteBufUtil.writeUtf8(buf2, usAscii, 5, 18);
+
+        assertEquals(buf, buf2);
+
+        buf.release();
+        buf2.release();
+    }
+
+    @Test
+    public void testWriteUtf8SubsequenceSplitSurrogate() {
+        String usAscii = "\uD800\uDC00"; // surrogate pair: one code point, two chars
+        ByteBuf buf = Unpooled.buffer(16);
+        buf.writeBytes(usAscii.substring(0, 1).getBytes(CharsetUtil.UTF_8));
+        ByteBuf buf2 = Unpooled.buffer(16);
+        ByteBufUtil.writeUtf8(buf2, usAscii, 0, 1);
+
+        assertEquals(buf, buf2);
+
+        buf.release();
+        buf2.release();
+    }
+
+    @Test
+    public void testReserveAndWriteUtf8Subsequence() {
+        String usAscii = "Some UTF-8 like äÄ∏ŒŒ";
+        ByteBuf buf = Unpooled.buffer(16);
+        buf.writeBytes(usAscii.substring(5, 18).getBytes(CharsetUtil.UTF_8));
+        ByteBuf buf2 = Unpooled.buffer(16);
+        int count = ByteBufUtil.reserveAndWriteUtf8(buf2, usAscii, 5, 18, 16);
+
+        assertEquals(buf, buf2);
+        assertEquals(buf.readableBytes(), count);
+
+        buf.release();
+        buf2.release();
+    }
+
+    @Test
+    public void testUtf8BytesSubsequence() {
+        String usAscii = "Some UTF-8 like äÄ∏ŒŒ";
+        assertEquals(usAscii.substring(5, 18).getBytes(CharsetUtil.UTF_8).length,
+                ByteBufUtil.utf8Bytes(usAscii, 5, 18));
+    }
+
+    private static int[][] INVALID_RANGES = new int[][] {
+        { -1, 5 }, { 5, 30 }, { 10, 5 }
+    };
+
+    interface TestMethod {
+        int invoke(Object... args);
+    }
+
+    private void testInvalidSubsequences(TestMethod method) {
+        for (int [] range : INVALID_RANGES) {
+            ByteBuf buf = Unpooled.buffer(16);
+            try {
+                method.invoke(buf, "Some UTF-8 like äÄ∏ŒŒ", range[0], range[1]);
+                fail("Did not throw IndexOutOfBoundsException for range (" + range[0] + ", " + range[1] + ")");
+            } catch (IndexOutOfBoundsException iiobe) {
+                // expected
+            } finally {
+                assertFalse(buf.isReadable());
+                buf.release();
+            }
+        }
+    }
+
+    @Test
+    public void testWriteUtf8InvalidSubsequences() {
+        testInvalidSubsequences(new TestMethod() {
+            @Override
+            public int invoke(Object... args) {
+                return ByteBufUtil.writeUtf8((ByteBuf) args[0], (String) args[1],
+                        (Integer) args[2], (Integer) args[3]);
+            }
+        });
+    }
+
+    @Test
+    public void testReserveAndWriteUtf8InvalidSubsequences() {
+        testInvalidSubsequences(new TestMethod() {
+            @Override
+            public int invoke(Object... args) {
+                return ByteBufUtil.reserveAndWriteUtf8((ByteBuf) args[0], (String) args[1],
+                        (Integer) args[2], (Integer) args[3], 32);
+            }
+        });
+    }
+
+    @Test
+    public void testUtf8BytesInvalidSubsequences() {
+        testInvalidSubsequences(new TestMethod() {
+            @Override
+            public int invoke(Object... args) {
+                return ByteBufUtil.utf8Bytes((String) args[1], (Integer) args[2], (Integer) args[3]);
+            }
+        });
+    }
+
+    @Test
     public void testDecodeUsAscii() {
         testDecodeString("This is a test", CharsetUtil.US_ASCII);
     }
@@ -677,19 +782,16 @@ public class ByteBufUtilTest {
 
         try {
             final AtomicInteger counter = new AtomicInteger(60000);
-            final AtomicReference<Throwable> errorRef = new AtomicReference<Throwable>();
-            List<Thread> threads = new ArrayList<Thread>();
+            final AtomicReference<Throwable> errorRef = new AtomicReference<>();
+            List<Thread> threads = new ArrayList<>();
             for (int i = 0; i < 10; i++) {
-                Thread thread = new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            while (errorRef.get() == null && counter.decrementAndGet() > 0) {
-                                assertTrue(ByteBufUtil.isText(buffer, CharsetUtil.ISO_8859_1));
-                            }
-                        } catch (Throwable cause) {
-                            errorRef.compareAndSet(null, cause);
+                Thread thread = new Thread(() -> {
+                    try {
+                        while (errorRef.get() == null && counter.decrementAndGet() > 0) {
+                            assertTrue(ByteBufUtil.isText(buffer, CharsetUtil.ISO_8859_1));
                         }
+                    } catch (Throwable cause) {
+                        errorRef.compareAndSet(null, cause);
                     }
                 });
                 threads.add(thread);

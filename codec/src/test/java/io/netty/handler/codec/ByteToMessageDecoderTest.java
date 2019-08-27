@@ -20,16 +20,18 @@ import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.buffer.UnpooledHeapByteBuf;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.embedded.EmbeddedChannel;
-import io.netty.util.internal.PlatformDependent;
 import org.junit.Test;
 
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.ThreadLocalRandom;
 
+import static io.netty.buffer.Unpooled.wrappedBuffer;
 import static org.junit.Assert.*;
 
 public class ByteToMessageDecoderTest {
@@ -40,7 +42,7 @@ public class ByteToMessageDecoderTest {
             private boolean removed;
 
             @Override
-            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
                 assertFalse(removed);
                 in.readByte();
                 ctx.pipeline().remove(this);
@@ -63,7 +65,7 @@ public class ByteToMessageDecoderTest {
             private boolean removed;
 
             @Override
-            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
                 assertFalse(removed);
                 in.readByte();
                 ctx.pipeline().remove(this);
@@ -116,7 +118,7 @@ public class ByteToMessageDecoderTest {
     private EmbeddedChannel newInternalBufferTestChannel() {
         return new EmbeddedChannel(new ByteToMessageDecoder() {
             @Override
-            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
                 ByteBuf byteBuf = internalBuffer();
                 assertEquals(1, byteBuf.refCnt());
                 in.readByte();
@@ -125,7 +127,7 @@ public class ByteToMessageDecoderTest {
             }
 
             @Override
-            protected void handlerRemoved0(ChannelHandlerContext ctx) throws Exception {
+            protected void handlerRemoved0(ChannelHandlerContext ctx) {
                 assertCumulationReleased(internalBuffer());
             }
         });
@@ -135,18 +137,18 @@ public class ByteToMessageDecoderTest {
     public void handlerRemovedWillNotReleaseBufferIfDecodeInProgress() {
         EmbeddedChannel channel = new EmbeddedChannel(new ByteToMessageDecoder() {
             @Override
-            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
                 ctx.pipeline().remove(this);
                 assertTrue(in.refCnt() != 0);
             }
 
             @Override
-            protected void handlerRemoved0(ChannelHandlerContext ctx) throws Exception {
+            protected void handlerRemoved0(ChannelHandlerContext ctx) {
                 assertCumulationReleased(internalBuffer());
             }
         });
         byte[] bytes = new byte[1024];
-        PlatformDependent.threadLocalRandom().nextBytes(bytes);
+        ThreadLocalRandom.current().nextBytes(bytes);
 
         assertTrue(channel.writeInbound(Unpooled.wrappedBuffer(bytes)));
         assertTrue(channel.finishAndReleaseAll());
@@ -159,34 +161,34 @@ public class ByteToMessageDecoderTest {
 
     @Test
     public void testFireChannelReadCompleteOnInactive() throws InterruptedException {
-        final BlockingQueue<Integer> queue = new LinkedBlockingDeque<Integer>();
+        final BlockingQueue<Integer> queue = new LinkedBlockingDeque<>();
         final ByteBuf buf = Unpooled.buffer().writeBytes(new byte[] {'a', 'b'});
         EmbeddedChannel channel = new EmbeddedChannel(new ByteToMessageDecoder() {
             @Override
-            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
                 int readable = in.readableBytes();
                 assertTrue(readable > 0);
                 in.skipBytes(readable);
             }
 
             @Override
-            protected void decodeLast(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+            protected void decodeLast(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
                 assertFalse(in.isReadable());
                 out.add("data");
             }
-        }, new ChannelInboundHandlerAdapter() {
+        }, new ChannelHandler() {
             @Override
-            public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+            public void channelInactive(ChannelHandlerContext ctx) {
                 queue.add(3);
             }
 
             @Override
-            public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            public void channelRead(ChannelHandlerContext ctx, Object msg) {
                 queue.add(1);
             }
 
             @Override
-            public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
+            public void channelReadComplete(ChannelHandlerContext ctx) {
                 if (!ctx.channel().isActive()) {
                     queue.add(2);
                 }
@@ -206,15 +208,15 @@ public class ByteToMessageDecoderTest {
         final Object upgradeMessage = new Object();
         final ByteToMessageDecoder decoder = new ByteToMessageDecoder() {
             @Override
-            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
                 assertEquals('a', in.readByte());
                 out.add(upgradeMessage);
             }
         };
 
-        EmbeddedChannel channel = new EmbeddedChannel(decoder, new ChannelInboundHandlerAdapter() {
+        EmbeddedChannel channel = new EmbeddedChannel(decoder, new ChannelHandler() {
             @Override
-            public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            public void channelRead(ChannelHandlerContext ctx, Object msg) {
                 if (msg == upgradeMessage) {
                     ctx.pipeline().remove(decoder);
                     return;
@@ -236,17 +238,17 @@ public class ByteToMessageDecoderTest {
     public void testDecodeLastEmptyBuffer() {
         EmbeddedChannel channel = new EmbeddedChannel(new ByteToMessageDecoder() {
             @Override
-            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
                 int readable = in.readableBytes();
                 assertTrue(readable > 0);
                 out.add(in.readBytes(readable));
             }
         });
         byte[] bytes = new byte[1024];
-        PlatformDependent.threadLocalRandom().nextBytes(bytes);
+        ThreadLocalRandom.current().nextBytes(bytes);
 
-        assertTrue(channel.writeInbound(Unpooled.wrappedBuffer(bytes)));
-        assertBuffer(Unpooled.wrappedBuffer(bytes), (ByteBuf) channel.readInbound());
+        assertTrue(channel.writeInbound(Unpooled.copiedBuffer(bytes)));
+        assertBuffer(Unpooled.wrappedBuffer(bytes), channel.readInbound());
         assertNull(channel.readInbound());
         assertFalse(channel.finish());
         assertNull(channel.readInbound());
@@ -258,7 +260,7 @@ public class ByteToMessageDecoderTest {
             private boolean decodeLast;
 
             @Override
-            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
                 int readable = in.readableBytes();
                 assertTrue(readable > 0);
                 if (!decodeLast && readable == 1) {
@@ -275,13 +277,13 @@ public class ByteToMessageDecoderTest {
             }
         });
         byte[] bytes = new byte[1024];
-        PlatformDependent.threadLocalRandom().nextBytes(bytes);
+        ThreadLocalRandom.current().nextBytes(bytes);
 
-        assertTrue(channel.writeInbound(Unpooled.wrappedBuffer(bytes)));
-        assertBuffer(Unpooled.wrappedBuffer(bytes, 0, bytes.length - 1), (ByteBuf) channel.readInbound());
+        assertTrue(channel.writeInbound(Unpooled.copiedBuffer(bytes)));
+        assertBuffer(Unpooled.wrappedBuffer(bytes, 0, bytes.length - 1), channel.readInbound());
         assertNull(channel.readInbound());
         assertTrue(channel.finish());
-        assertBuffer(Unpooled.wrappedBuffer(bytes, bytes.length - 1, 1), (ByteBuf) channel.readInbound());
+        assertBuffer(Unpooled.wrappedBuffer(bytes, bytes.length - 1, 1), channel.readInbound());
         assertNull(channel.readInbound());
     }
 
@@ -298,7 +300,7 @@ public class ByteToMessageDecoderTest {
     public void testReadOnlyBuffer() {
         EmbeddedChannel channel = new EmbeddedChannel(new ByteToMessageDecoder() {
             @Override
-            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
             }
         });
         assertFalse(channel.writeInbound(Unpooled.buffer(8).writeByte(1).asReadOnly()));
@@ -344,5 +346,57 @@ public class ByteToMessageDecoderTest {
             assertSame(error, expected);
             assertEquals(0, in.refCnt());
         }
+    }
+
+    @Test
+    public void testDoesNotOverRead() {
+        class ReadInterceptingHandler extends ChannelOutboundHandlerAdapter {
+            private int readsTriggered;
+
+            @Override
+            public void read(ChannelHandlerContext ctx) throws Exception {
+                readsTriggered++;
+                super.read(ctx);
+            }
+        }
+        ReadInterceptingHandler interceptor = new ReadInterceptingHandler();
+
+        EmbeddedChannel channel = new EmbeddedChannel();
+        channel.config().setAutoRead(false);
+        channel.pipeline().addLast(interceptor, new FixedLengthFrameDecoder(3));
+        assertEquals(0, interceptor.readsTriggered);
+
+        // 0 complete frames, 1 partial frame: SHOULD trigger a read
+        channel.writeInbound(wrappedBuffer(new byte[] { 0, 1 }));
+        assertEquals(1, interceptor.readsTriggered);
+
+        // 2 complete frames, 0 partial frames: should NOT trigger a read
+        channel.writeInbound(wrappedBuffer(new byte[] { 2 }), wrappedBuffer(new byte[] { 3, 4, 5 }));
+        assertEquals(1, interceptor.readsTriggered);
+
+        // 1 complete frame, 1 partial frame: should NOT trigger a read
+        channel.writeInbound(wrappedBuffer(new byte[] { 6, 7, 8 }), wrappedBuffer(new byte[] { 9 }));
+        assertEquals(1, interceptor.readsTriggered);
+
+        // 1 complete frame, 1 partial frame: should NOT trigger a read
+        channel.writeInbound(wrappedBuffer(new byte[] { 10, 11 }), wrappedBuffer(new byte[] { 12 }));
+        assertEquals(1, interceptor.readsTriggered);
+
+        // 0 complete frames, 1 partial frame: SHOULD trigger a read
+        channel.writeInbound(wrappedBuffer(new byte[] { 13 }));
+        assertEquals(2, interceptor.readsTriggered);
+
+        // 1 complete frame, 0 partial frames: should NOT trigger a read
+        channel.writeInbound(wrappedBuffer(new byte[] { 14 }));
+        assertEquals(2, interceptor.readsTriggered);
+
+        for (int i = 0; i < 5; i++) {
+            ByteBuf read = channel.readInbound();
+            assertEquals(i * 3 + 0, read.getByte(0));
+            assertEquals(i * 3 + 1, read.getByte(1));
+            assertEquals(i * 3 + 2, read.getByte(2));
+            read.release();
+        }
+        assertFalse(channel.finish());
     }
 }

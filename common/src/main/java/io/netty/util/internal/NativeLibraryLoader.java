@@ -36,6 +36,7 @@ import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Helper class to load JNI resources.
@@ -90,7 +91,7 @@ public final class NativeLibraryLoader {
      *         if none of the given libraries load successfully.
      */
     public static void loadFirstAvailable(ClassLoader loader, String... names) {
-        List<Throwable> suppressed = new ArrayList<Throwable>();
+        List<Throwable> suppressed = new ArrayList<>();
         for (String name : names) {
             try {
                 load(name, loader);
@@ -130,7 +131,7 @@ public final class NativeLibraryLoader {
         // Adjust expected name to support shading of native libraries.
         String packagePrefix = calculatePackagePrefix().replace('.', '_');
         String name = packagePrefix + originalName;
-        List<Throwable> suppressed = new ArrayList<Throwable>();
+        List<Throwable> suppressed = new ArrayList<>();
         try {
             // first try to load from java.library.path
             loadLibrary(loader, name, false);
@@ -138,7 +139,7 @@ public final class NativeLibraryLoader {
         } catch (Throwable ex) {
             suppressed.add(ex);
             logger.debug(
-                    "{} cannot be loaded from java.libary.path, "
+                    "{} cannot be loaded from java.library.path, "
                     + "now trying export to -Dio.netty.native.workdir: {}", name, WORKDIR, ex);
         }
 
@@ -178,34 +179,22 @@ public final class NativeLibraryLoader {
 
             int index = libname.lastIndexOf('.');
             String prefix = libname.substring(0, index);
-            String suffix = libname.substring(index, libname.length());
+            String suffix = libname.substring(index);
 
             tmpFile = File.createTempFile(prefix, suffix, WORKDIR);
             in = url.openStream();
             out = new FileOutputStream(tmpFile);
 
-            byte[] buffer = new byte[8192];
-            int length;
-            if (TRY_TO_PATCH_SHADED_ID && PlatformDependent.isOsx() && !packagePrefix.isEmpty()) {
-                // We read the whole native lib into memory to make it easier to monkey-patch the id.
-                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream(in.available());
-
-                while ((length = in.read(buffer)) > 0) {
-                    byteArrayOutputStream.write(buffer, 0, length);
-                }
-                byteArrayOutputStream.flush();
-                byte[] bytes = byteArrayOutputStream.toByteArray();
-                byteArrayOutputStream.close();
-
-                // Try to patch the library id.
-                patchShadedLibraryId(bytes, originalName, name);
-
-                out.write(bytes);
+            if (shouldShadedLibraryIdBePatched(packagePrefix)) {
+                patchShadedLibraryId(in, out, originalName, name);
             } else {
+                byte[] buffer = new byte[8192];
+                int length;
                 while ((length = in.read(buffer)) > 0) {
                     out.write(buffer, 0, length);
                 }
             }
+
             out.flush();
 
             // Close the output stream before loading the unpacked library,
@@ -249,10 +238,50 @@ public final class NativeLibraryLoader {
         }
     }
 
+    // Package-private for testing.
+    static boolean patchShadedLibraryId(InputStream in, OutputStream out, String originalName, String name)
+            throws IOException {
+        byte[] buffer = new byte[8192];
+        int length;
+        // We read the whole native lib into memory to make it easier to monkey-patch the id.
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream(in.available());
+
+        while ((length = in.read(buffer)) > 0) {
+            byteArrayOutputStream.write(buffer, 0, length);
+        }
+        byteArrayOutputStream.flush();
+        byte[] bytes = byteArrayOutputStream.toByteArray();
+        byteArrayOutputStream.close();
+
+        final boolean patched;
+        // Try to patch the library id.
+        if (!patchShadedLibraryId(bytes, originalName, name)) {
+            // We did not find the Id, check if we used a originalName that has the os and arch as suffix.
+            // If this is the case we should also try to patch with the os and arch suffix removed.
+            String os = PlatformDependent.normalizedOs();
+            String arch = PlatformDependent.normalizedArch();
+            String osArch = "_" + os + "_" + arch;
+            if (originalName.endsWith(osArch)) {
+                patched = patchShadedLibraryId(bytes,
+                        originalName.substring(0, originalName.length() - osArch.length()), name);
+            } else {
+                patched = false;
+            }
+        } else {
+            patched = true;
+        }
+        out.write(bytes, 0, bytes.length);
+        return patched;
+    }
+
+    private static boolean shouldShadedLibraryIdBePatched(String packagePrefix) {
+        return TRY_TO_PATCH_SHADED_ID && PlatformDependent.isOsx() && !packagePrefix.isEmpty();
+    }
+
     /**
      * Try to patch shaded library to ensure it uses a unique ID.
      */
-    private static void patchShadedLibraryId(byte[] bytes, String originalName, String name) {
+    private static boolean patchShadedLibraryId(byte[] bytes, String originalName, String name) {
         // Our native libs always have the name as part of their id so we can search for it and replace it
         // to make the ID unique if shading is used.
         byte[] nameBytes = originalName.getBytes(CharsetUtil.UTF_8);
@@ -278,12 +307,12 @@ public final class NativeLibraryLoader {
 
         if (idIdx == -1) {
             logger.debug("Was not able to find the ID of the shaded native library {}, can't adjust it.", name);
+            return false;
         } else {
             // We found our ID... now monkey-patch it!
             for (int i = 0; i < nameBytes.length; i++) {
                 // We should only use bytes as replacement that are in our UNIQUE_ID_BYTES array.
-                bytes[idIdx + i] = UNIQUE_ID_BYTES[PlatformDependent.threadLocalRandom()
-                                                                    .nextInt(UNIQUE_ID_BYTES.length)];
+                bytes[idIdx + i] = UNIQUE_ID_BYTES[ThreadLocalRandom.current().nextInt(UNIQUE_ID_BYTES.length)];
             }
 
             if (logger.isDebugEnabled()) {
@@ -291,6 +320,7 @@ public final class NativeLibraryLoader {
                         "Found the ID of the shaded native library {}. Replacing ID part {} with {}",
                         name, originalName, new String(bytes, idIdx, nameBytes.length, CharsetUtil.UTF_8));
             }
+            return true;
         }
     }
 
@@ -309,10 +339,7 @@ public final class NativeLibraryLoader {
                 loadLibraryByHelper(newHelper, name, absolute);
                 logger.debug("Successfully loaded the library {}", name);
                 return;
-            } catch (UnsatisfiedLinkError e) { // Should by pass the UnsatisfiedLinkError here!
-                suppressed = e;
-                logger.debug("Unable to load the library '{}', trying other loading mechanism.", name, e);
-            } catch (Exception e) {
+            } catch (UnsatisfiedLinkError | Exception e) { // Should by pass the UnsatisfiedLinkError here!
                 suppressed = e;
                 logger.debug("Unable to load the library '{}', trying other loading mechanism.", name, e);
             }
@@ -328,18 +355,15 @@ public final class NativeLibraryLoader {
 
     private static void loadLibraryByHelper(final Class<?> helper, final String name, final boolean absolute)
             throws UnsatisfiedLinkError {
-        Object ret = AccessController.doPrivileged(new PrivilegedAction<Object>() {
-            @Override
-            public Object run() {
-                try {
-                    // Invoke the helper to load the native library, if succeed, then the native
-                    // library belong to the specified ClassLoader.
-                    Method method = helper.getMethod("loadLibrary", String.class, boolean.class);
-                    method.setAccessible(true);
-                    return method.invoke(null, name, absolute);
-                } catch (Exception e) {
-                    return e;
-                }
+        Object ret = AccessController.doPrivileged((PrivilegedAction<Object>) () -> {
+            try {
+                // Invoke the helper to load the native library, if succeed, then the native
+                // library belong to the specified ClassLoader.
+                Method method = helper.getMethod("loadLibrary", String.class, boolean.class);
+                method.setAccessible(true);
+                return method.invoke(null, name, absolute);
+            } catch (Exception e) {
+                return e;
             }
         });
         if (ret instanceof Throwable) {
@@ -374,29 +398,20 @@ public final class NativeLibraryLoader {
             try {
                 // The helper class is NOT found in target ClassLoader, we have to define the helper class.
                 final byte[] classBinary = classToByteArray(helper);
-                return AccessController.doPrivileged(new PrivilegedAction<Class<?>>() {
-                    @Override
-                    public Class<?> run() {
-                        try {
-                            // Define the helper class in the target ClassLoader,
-                            //  then we can call the helper to load the native library.
-                            Method defineClass = ClassLoader.class.getDeclaredMethod("defineClass", String.class,
-                                    byte[].class, int.class, int.class);
-                            defineClass.setAccessible(true);
-                            return (Class<?>) defineClass.invoke(loader, helper.getName(), classBinary, 0,
-                                    classBinary.length);
-                        } catch (Exception e) {
-                            throw new IllegalStateException("Define class failed!", e);
-                        }
+                return AccessController.doPrivileged((PrivilegedAction<Class<?>>) () -> {
+                    try {
+                        // Define the helper class in the target ClassLoader,
+                        //  then we can call the helper to load the native library.
+                        Method defineClass = ClassLoader.class.getDeclaredMethod("defineClass", String.class,
+                                byte[].class, int.class, int.class);
+                        defineClass.setAccessible(true);
+                        return (Class<?>) defineClass.invoke(loader, helper.getName(), classBinary, 0,
+                                classBinary.length);
+                    } catch (Exception e) {
+                        throw new IllegalStateException("Define class failed!", e);
                     }
                 });
-            } catch (ClassNotFoundException e2) {
-                ThrowableUtil.addSuppressed(e2, e1);
-                throw e2;
-            } catch (RuntimeException e2) {
-                ThrowableUtil.addSuppressed(e2, e1);
-                throw e2;
-            } catch (Error e2) {
+            } catch (ClassNotFoundException | Error | RuntimeException e2) {
                 ThrowableUtil.addSuppressed(e2, e1);
                 throw e2;
             }
@@ -453,12 +468,6 @@ public final class NativeLibraryLoader {
     private static final class NoexecVolumeDetector {
 
         private static boolean canExecuteExecutable(File file) throws IOException {
-            if (PlatformDependent.javaVersion() < 7) {
-                // Pre-JDK7, the Java API did not directly support POSIX permissions; instead of implementing a custom
-                // work-around, assume true, which disables the check.
-                return true;
-            }
-
             // If we can already execute, there is nothing to do.
             if (file.canExecute()) {
                 return true;

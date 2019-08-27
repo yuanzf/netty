@@ -15,6 +15,8 @@
  */
 package io.netty.handler.ssl;
 
+import static java.util.Objects.requireNonNull;
+
 import java.security.PrivateKey;
 
 import javax.security.auth.Destroyable;
@@ -25,7 +27,6 @@ import io.netty.buffer.Unpooled;
 import io.netty.util.AbstractReferenceCounted;
 import io.netty.util.CharsetUtil;
 import io.netty.util.IllegalReferenceCountException;
-import io.netty.util.internal.ObjectUtil;
 
 /**
  * This is a special purpose implementation of a {@link PrivateKey} which allows the
@@ -65,6 +66,10 @@ public final class PemPrivateKey extends AbstractReferenceCounted implements Pri
             throw new IllegalArgumentException(key.getClass().getName() + " does not support encoding");
         }
 
+        return toPEM(allocator, useDirect, bytes);
+    }
+
+    static PemEncoded toPEM(ByteBufAllocator allocator, boolean useDirect, byte[] bytes) {
         ByteBuf encoded = Unpooled.wrappedBuffer(bytes);
         try {
             ByteBuf base64 = SslUtils.toBase64(allocator, encoded);
@@ -118,7 +123,7 @@ public final class PemPrivateKey extends AbstractReferenceCounted implements Pri
     private final ByteBuf content;
 
     private PemPrivateKey(ByteBuf content) {
-        this.content = ObjectUtil.checkNotNull(content, "content");
+        this.content = requireNonNull(content, "content");
     }
 
     @Override
@@ -207,6 +212,7 @@ public final class PemPrivateKey extends AbstractReferenceCounted implements Pri
      *
      * @see Destroyable#destroy()
      */
+    @Override
     public void destroy() {
         release(refCnt());
     }
@@ -218,6 +224,7 @@ public final class PemPrivateKey extends AbstractReferenceCounted implements Pri
      *
      * @see Destroyable#isDestroyed()
      */
+    @Override
     public boolean isDestroyed() {
         return refCnt() == 0;
     }

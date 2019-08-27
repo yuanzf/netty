@@ -55,7 +55,7 @@ public class CombinedHttpHeadersTest {
         otherHeaders.add(HEADER_NAME, "a");
         otherHeaders.add(HEADER_NAME, "b");
         headers.add(otherHeaders);
-        assertEquals("a,b", headers.get(HEADER_NAME).toString());
+        assertEquals("a,b", headers.get(HEADER_NAME));
     }
 
     @Test
@@ -66,7 +66,29 @@ public class CombinedHttpHeadersTest {
         otherHeaders.add(HEADER_NAME, "b");
         otherHeaders.add(HEADER_NAME, "c");
         headers.add(otherHeaders);
-        assertEquals("a,b,c", headers.get(HEADER_NAME).toString());
+        assertEquals("a,b,c", headers.get(HEADER_NAME));
+    }
+
+    @Test
+    public void dontCombineSetCookieHeaders() {
+        final CombinedHttpHeaders headers = newCombinedHttpHeaders();
+        headers.add(SET_COOKIE, "a");
+        final CombinedHttpHeaders otherHeaders = newCombinedHttpHeaders();
+        otherHeaders.add(SET_COOKIE, "b");
+        otherHeaders.add(SET_COOKIE, "c");
+        headers.add(otherHeaders);
+        assertThat(headers.getAll(SET_COOKIE), hasSize(3));
+    }
+
+    @Test
+    public void dontCombineSetCookieHeadersRegardlessOfCase() {
+        final CombinedHttpHeaders headers = newCombinedHttpHeaders();
+        headers.add("Set-Cookie", "a");
+        final CombinedHttpHeaders otherHeaders = newCombinedHttpHeaders();
+        otherHeaders.add("set-cookie", "b");
+        otherHeaders.add("SET-COOKIE", "c");
+        headers.add(otherHeaders);
+        assertThat(headers.getAll(SET_COOKIE), hasSize(3));
     }
 
     @Test
@@ -99,7 +121,7 @@ public class CombinedHttpHeadersTest {
         otherHeaders.add(HEADER_NAME, "b");
         otherHeaders.add(HEADER_NAME, "c");
         headers.set(otherHeaders);
-        assertEquals("b,c", headers.get(HEADER_NAME).toString());
+        assertEquals("b,c", headers.get(HEADER_NAME));
     }
 
     @Test
@@ -110,7 +132,7 @@ public class CombinedHttpHeadersTest {
         otherHeaders.add(HEADER_NAME, "b");
         otherHeaders.add(HEADER_NAME, "c");
         headers.add(otherHeaders);
-        assertEquals("a,b,c", headers.get(HEADER_NAME).toString());
+        assertEquals("a,b,c", headers.get(HEADER_NAME));
     }
 
     @Test
@@ -121,7 +143,7 @@ public class CombinedHttpHeadersTest {
         otherHeaders.add(HEADER_NAME, "b");
         otherHeaders.add(HEADER_NAME, "c");
         headers.set(otherHeaders);
-        assertEquals("b,c", headers.get(HEADER_NAME).toString());
+        assertEquals("b,c", headers.get(HEADER_NAME));
     }
 
     @Test
@@ -196,7 +218,7 @@ public class CombinedHttpHeadersTest {
     public void addIterableCsvEmpty() {
         final CombinedHttpHeaders headers = newCombinedHttpHeaders();
         headers.add(HEADER_NAME, Collections.<CharSequence>emptyList());
-        assertEquals(Arrays.asList(""), headers.getAll(HEADER_NAME));
+        assertEquals(Collections.singletonList(""), headers.getAll(HEADER_NAME));
     }
 
     @Test
@@ -294,9 +316,18 @@ public class CombinedHttpHeadersTest {
         headers.set(HEADER_NAME, Arrays.asList("\"a\"", "\"b\"", "\"c\""));
         assertEquals(Arrays.asList("a", "b", "c"), headers.getAll(HEADER_NAME));
         headers.set(HEADER_NAME, "a,b,c");
-        assertEquals(Arrays.asList("a,b,c"), headers.getAll(HEADER_NAME));
+        assertEquals(Collections.singletonList("a,b,c"), headers.getAll(HEADER_NAME));
         headers.set(HEADER_NAME, "\"a,b,c\"");
-        assertEquals(Arrays.asList("a,b,c"), headers.getAll(HEADER_NAME));
+        assertEquals(Collections.singletonList("a,b,c"), headers.getAll(HEADER_NAME));
+    }
+
+    @Test
+    public void getAllDontCombineSetCookie() {
+        final CombinedHttpHeaders headers = newCombinedHttpHeaders();
+        headers.add(SET_COOKIE, "a");
+        headers.add(SET_COOKIE, "b");
+        assertThat(headers.getAll(SET_COOKIE), hasSize(2));
+        assertEquals(Arrays.asList("a", "b"), headers.getAll(SET_COOKIE));
     }
 
     @Test

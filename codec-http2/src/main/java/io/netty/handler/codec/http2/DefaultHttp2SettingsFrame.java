@@ -16,7 +16,8 @@
 
 package io.netty.handler.codec.http2;
 
-import io.netty.util.internal.ObjectUtil;
+import static java.util.Objects.requireNonNull;
+
 import io.netty.util.internal.StringUtil;
 import io.netty.util.internal.UnstableApi;
 
@@ -29,7 +30,7 @@ public class DefaultHttp2SettingsFrame implements Http2SettingsFrame {
     private final Http2Settings settings;
 
     public DefaultHttp2SettingsFrame(Http2Settings settings) {
-        this.settings = ObjectUtil.checkNotNull(settings, "settings");
+        this.settings = requireNonNull(settings, "settings");
     }
 
     @Override
@@ -40,6 +41,20 @@ public class DefaultHttp2SettingsFrame implements Http2SettingsFrame {
     @Override
     public String name() {
         return "SETTINGS";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof Http2SettingsFrame)) {
+            return false;
+        }
+        Http2SettingsFrame other = (Http2SettingsFrame) o;
+        return settings.equals(other.settings());
+    }
+
+    @Override
+    public int hashCode() {
+        return settings.hashCode();
     }
 
     @Override

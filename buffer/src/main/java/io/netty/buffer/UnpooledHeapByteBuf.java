@@ -15,6 +15,8 @@
  */
 package io.netty.buffer;
 
+import static java.util.Objects.requireNonNull;
+
 import io.netty.util.internal.EmptyArrays;
 import io.netty.util.internal.PlatformDependent;
 
@@ -27,8 +29,6 @@ import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
 import java.nio.channels.ScatteringByteChannel;
-
-import static io.netty.util.internal.ObjectUtil.checkNotNull;
 
 /**
  * Big endian Java heap buffer implementation. It is recommended to use
@@ -50,7 +50,7 @@ public class UnpooledHeapByteBuf extends AbstractReferenceCountedByteBuf {
     public UnpooledHeapByteBuf(ByteBufAllocator alloc, int initialCapacity, int maxCapacity) {
         super(maxCapacity);
 
-        checkNotNull(alloc, "alloc");
+        requireNonNull(alloc, "alloc");
 
         if (initialCapacity > maxCapacity) {
             throw new IllegalArgumentException(String.format(
@@ -71,8 +71,8 @@ public class UnpooledHeapByteBuf extends AbstractReferenceCountedByteBuf {
     protected UnpooledHeapByteBuf(ByteBufAllocator alloc, byte[] initialArray, int maxCapacity) {
         super(maxCapacity);
 
-        checkNotNull(alloc, "alloc");
-        checkNotNull(initialArray, "initialArray");
+        requireNonNull(alloc, "alloc");
+        requireNonNull(initialArray, "initialArray");
 
         if (initialArray.length > maxCapacity) {
             throw new IllegalArgumentException(String.format(
@@ -120,29 +120,23 @@ public class UnpooledHeapByteBuf extends AbstractReferenceCountedByteBuf {
     @Override
     public ByteBuf capacity(int newCapacity) {
         checkNewCapacity(newCapacity);
-
-        int oldCapacity = array.length;
         byte[] oldArray = array;
-        if (newCapacity > oldCapacity) {
-            byte[] newArray = allocateArray(newCapacity);
-            System.arraycopy(oldArray, 0, newArray, 0, oldArray.length);
-            setArray(newArray);
-            freeArray(oldArray);
-        } else if (newCapacity < oldCapacity) {
-            byte[] newArray = allocateArray(newCapacity);
-            int readerIndex = readerIndex();
-            if (readerIndex < newCapacity) {
-                int writerIndex = writerIndex();
-                if (writerIndex > newCapacity) {
-                    writerIndex(writerIndex = newCapacity);
-                }
-                System.arraycopy(oldArray, readerIndex, newArray, readerIndex, writerIndex - readerIndex);
-            } else {
-                setIndex(newCapacity, newCapacity);
-            }
-            setArray(newArray);
-            freeArray(oldArray);
+        int oldCapacity = oldArray.length;
+        if (newCapacity == oldCapacity) {
+            return this;
         }
+
+        int bytesToCopy;
+        if (newCapacity > oldCapacity) {
+            bytesToCopy = oldCapacity;
+        } else {
+            trimIndicesToCapacity(newCapacity);
+            bytesToCopy = newCapacity;
+        }
+        byte[] newArray = allocateArray(newCapacity);
+        System.arraycopy(oldArray, 0, newArray, 0, bytesToCopy);
+        setArray(newArray);
+        freeArray(oldArray);
         return this;
     }
 
@@ -194,7 +188,7 @@ public class UnpooledHeapByteBuf extends AbstractReferenceCountedByteBuf {
 
     @Override
     public ByteBuf getBytes(int index, ByteBuffer dst) {
-        checkIndex(index, dst.remaining());
+        ensureAccessible();
         dst.put(array, index, dst.remaining());
         return this;
     }
@@ -536,9 +530,7 @@ public class UnpooledHeapByteBuf extends AbstractReferenceCountedByteBuf {
     @Override
     public ByteBuf copy(int index, int length) {
         checkIndex(index, length);
-        byte[] copiedArray = PlatformDependent.allocateUninitializedArray(length);
-        System.arraycopy(array, index, copiedArray, 0, length);
-        return new UnpooledHeapByteBuf(alloc(), copiedArray, maxCapacity());
+        return alloc().heapBuffer(length, maxCapacity()).writeBytes(array, index, length);
     }
 
     private ByteBuffer internalNioBuffer() {

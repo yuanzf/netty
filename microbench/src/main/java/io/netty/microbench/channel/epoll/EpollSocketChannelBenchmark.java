@@ -19,23 +19,30 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelDuplexHandler;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPromise;
-import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.MultithreadEventLoopGroup;
+import io.netty.channel.epoll.EpollHandler;
 import io.netty.channel.epoll.EpollServerSocketChannel;
 import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.microbench.util.AbstractMicrobenchmark;
 import io.netty.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.GroupThreads;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.TearDown;
 
 public class EpollSocketChannelBenchmark extends AbstractMicrobenchmark {
+    private static final Runnable runnable = new Runnable() {
+        @Override
+        public void run() { }
+    };
 
-    private EpollEventLoopGroup group;
+    private EventLoopGroup group;
     private Channel serverChan;
     private Channel chan;
     private ByteBuf abyte;
@@ -43,14 +50,11 @@ public class EpollSocketChannelBenchmark extends AbstractMicrobenchmark {
 
     @Setup
     public void setup() throws Exception {
-        group = new EpollEventLoopGroup(1);
+        group = new MultithreadEventLoopGroup(1, EpollHandler.newFactory());
 
         // add an arbitrary timeout to make the timer reschedule
-        future = group.schedule(new Runnable() {
-            @Override
-            public void run() {
-                throw new AssertionError();
-            }
+        future = group.schedule((Runnable) () -> {
+            throw new AssertionError();
         }, 5, TimeUnit.MINUTES);
         serverChan = new ServerBootstrap()
             .channel(EpollServerSocketChannel.class)
@@ -58,7 +62,7 @@ public class EpollSocketChannelBenchmark extends AbstractMicrobenchmark {
             .childHandler(new ChannelInitializer<Channel>() {
                 @Override
                 protected void initChannel(Channel ch) {
-                    ch.pipeline().addLast(new ChannelDuplexHandler() {
+                    ch.pipeline().addLast(new ChannelHandler() {
                         @Override
                         public void channelRead(ChannelHandlerContext ctx, Object msg) {
                             if (msg instanceof ByteBuf) {
@@ -78,7 +82,7 @@ public class EpollSocketChannelBenchmark extends AbstractMicrobenchmark {
         .handler(new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) {
-                ch.pipeline().addLast(new ChannelDuplexHandler() {
+                ch.pipeline().addLast(new ChannelHandler() {
 
                 private ChannelPromise lastWritePromise;
 
@@ -109,7 +113,7 @@ public class EpollSocketChannelBenchmark extends AbstractMicrobenchmark {
                             throw new IllegalStateException();
                         }
                         lastWritePromise = promise;
-                        super.write(ctx, msg, ctx.voidPromise());
+                        ctx.write(msg, ctx.voidPromise());
                     }
                 });
             }
@@ -135,5 +139,16 @@ public class EpollSocketChannelBenchmark extends AbstractMicrobenchmark {
     @Benchmark
     public Object pingPong() throws Exception {
         return chan.pipeline().writeAndFlush(abyte.retainedSlice()).sync();
+    }
+
+    @Benchmark
+    public Object executeSingle() throws Exception {
+        return chan.eventLoop().submit(runnable).get();
+    }
+
+    @Benchmark
+    @GroupThreads(3)
+    public Object executeMulti() throws Exception {
+        return chan.eventLoop().submit(runnable).get();
     }
 }

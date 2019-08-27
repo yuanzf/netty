@@ -26,7 +26,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.security.PrivateKey;
 
-import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import org.junit.Test;
 
@@ -47,7 +46,7 @@ public class PemEncodedTest {
 
     private static void testPemEncoded(SslProvider provider) throws Exception {
         assumeTrue(OpenSsl.isAvailable());
-        assumeFalse(OpenSsl.useKeyManagerFactory());
+        assumeFalse(OpenSsl.supportsKeyManagerFactory());
         PemPrivateKey pemKey;
         PemX509Certificate pemCert;
         SelfSignedCertificate ssc = new SelfSignedCertificate();
