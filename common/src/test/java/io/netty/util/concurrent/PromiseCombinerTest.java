@@ -73,18 +73,6 @@ public class PromiseCombinerTest {
     }
 
     @Test
-    public void testNullArgument() {
-        try {
-            combiner.finish(null);
-            Assert.fail();
-        } catch (NullPointerException expected) {
-            // expected
-        }
-        combiner.finish(p1);
-        verify(p1).trySuccess(null);
-    }
-
-    @Test
     public void testNullAggregatePromise() {
         combiner.finish(p1);
         verify(p1).trySuccess(null);

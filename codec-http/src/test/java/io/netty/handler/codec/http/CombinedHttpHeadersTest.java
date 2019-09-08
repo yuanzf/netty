@@ -92,28 +92,6 @@ public class CombinedHttpHeadersTest {
     }
 
     @Test
-    public void dontCombineSetCookieHeaders() {
-        final CombinedHttpHeaders headers = newCombinedHttpHeaders();
-        headers.add(SET_COOKIE, "a");
-        final CombinedHttpHeaders otherHeaders = newCombinedHttpHeaders();
-        otherHeaders.add(SET_COOKIE, "b");
-        otherHeaders.add(SET_COOKIE, "c");
-        headers.add(otherHeaders);
-        assertThat(headers.getAll(SET_COOKIE), hasSize(3));
-    }
-
-    @Test
-    public void dontCombineSetCookieHeadersRegardlessOfCase() {
-        final CombinedHttpHeaders headers = newCombinedHttpHeaders();
-        headers.add("Set-Cookie", "a");
-        final CombinedHttpHeaders otherHeaders = newCombinedHttpHeaders();
-        otherHeaders.add("set-cookie", "b");
-        otherHeaders.add("SET-COOKIE", "c");
-        headers.add(otherHeaders);
-        assertThat(headers.getAll(SET_COOKIE), hasSize(3));
-    }
-
-    @Test
     public void setCombinedHeadersWhenNotEmpty() {
         final CombinedHttpHeaders headers = newCombinedHttpHeaders();
         headers.add(HEADER_NAME, "a");
@@ -330,14 +308,6 @@ public class CombinedHttpHeadersTest {
         assertEquals(Arrays.asList("a", "b"), headers.getAll(SET_COOKIE));
     }
 
-    @Test
-    public void getAllDontCombineSetCookie() {
-        final CombinedHttpHeaders headers = newCombinedHttpHeaders();
-        headers.add(SET_COOKIE, "a");
-        headers.add(SET_COOKIE, "b");
-        assertThat(headers.getAll(SET_COOKIE), hasSize(2));
-        assertEquals(Arrays.asList("a", "b"), headers.getAll(SET_COOKIE));
-    }
 
     @Test
     public void owsTrimming() {
