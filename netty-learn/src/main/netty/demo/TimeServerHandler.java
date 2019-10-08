@@ -15,14 +15,16 @@ import java.util.Date;
  */
 public class TimeServerHandler extends ChannelHandlerAdapter {
 
-    public void channelRead(ChannelHandlerContext ctx,ByteBuf buf) throws Exception{
+    @Override
+    public void channelRead(ChannelHandlerContext ctx,Object msg) throws Exception{
+        ByteBuf buf = (ByteBuf) msg;
         byte[] req = new byte[buf.readableBytes()];
         buf.readBytes(req);
         String body = new String(req,"UTF-8");
         System.out.println("the time server receive order :" + body);
         String currentTime = "QUERY TIME ORDER".equalsIgnoreCase(body) ? new Date().toString() : "BAD ORDER";
         ByteBuf resp = Unpooled.copiedBuffer(currentTime.getBytes());
-        ctx.write(resp);
+        ctx.writeAndFlush(resp);
         /*
         could not access io.netty.util.referenceCount
           ByteBuff内存泄漏导致的问题，于是从这方面着手调查，发现netty5默认的分配bytebuff的方式是PooledByteBufAllocator,所以要手动回收，要不然会造成内存泄漏。
