@@ -49,7 +49,13 @@ public interface EventExecutorGroup extends ScheduledExecutorService, Iterable<E
      * (usually a couple seconds) before it shuts itself down.  If a task is submitted during the quiet period,
      * it is guaranteed to be accepted and the quiet period will start over.
      *
+     * 当次方法调用后，会等待所有任务执行完成之后关闭关闭线程池，当此方法调用 isShuttingDown()会返回true。
+     *
+     * 在 quitePeriod期间，确保没有任务提交过来，通常设置几分钟，
+     * timeout : 最大等待时间，当在timeout中还没有结束就强制shutDown
+     *
      * @param quietPeriod the quiet period as described in the documentation
+     *
      * @param timeout     the maximum amount of time to wait until the executor is {@linkplain #shutdown()}
      *                    regardless if a task was submitted during the quiet period
      * @param unit        the unit of {@code quietPeriod} and {@code timeout}
@@ -61,6 +67,7 @@ public interface EventExecutorGroup extends ScheduledExecutorService, Iterable<E
     /**
      * Returns the {@link Future} which is notified when all {@link EventExecutor}s managed by this
      * {@link EventExecutorGroup} have been terminated.
+     * 通知所有的EventExecutor EventExecutorGroup已经终止
      */
     Future<?> terminationFuture();
 
@@ -80,6 +87,7 @@ public interface EventExecutorGroup extends ScheduledExecutorService, Iterable<E
 
     /**
      * Returns one of the {@link EventExecutor}s managed by this {@link EventExecutorGroup}.
+     * 返回事件执行器
      */
     EventExecutor next();
 

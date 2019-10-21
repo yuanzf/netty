@@ -30,6 +30,11 @@ public final class ReflectiveServerChannelFactory<T extends ServerChannel> imple
 
     private final Constructor<? extends T> constructor;
 
+    /**
+     *通过反射创建 NioServerSocketChannel，其中调用NioServerSocketChannel(EventLoop eventLoop, EventLoopGroup childEventLoopGroup)
+     * 这个构造方法
+     * @param clazz
+     */
     public ReflectiveServerChannelFactory(Class<? extends T> clazz) {
         requireNonNull(clazz, "clazz");
         try {
@@ -40,6 +45,12 @@ public final class ReflectiveServerChannelFactory<T extends ServerChannel> imple
         }
     }
 
+    /**
+     * 构建新的ServerSocketChannel
+     * @param eventLoop
+     * @param childEventLoopGroup
+     * @return
+     */
     @Override
     public T newChannel(EventLoop eventLoop, EventLoopGroup childEventLoopGroup) {
         try {

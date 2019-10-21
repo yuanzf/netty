@@ -56,6 +56,8 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
     private final ServerBootstrapConfig config = new ServerBootstrapConfig(this);
     private volatile EventLoopGroup childGroup;
     private volatile ChannelHandler childHandler;
+
+    //后期需要创建ServerSocketChannel，只需要调用给你channelFactory.newInstace()方法，
     volatile ServerChannelFactory<? extends ServerChannel> channelFactory;
 
     public ServerBootstrap() { }
@@ -81,6 +83,8 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
      * Set the {@link EventLoopGroup} for the parent (acceptor) and the child (client). These
      * {@link EventLoopGroup}'s are used to handle all the events and IO for {@link ServerChannel} and
      * {@link Channel}'s.
+     *
+     *
      */
     public ServerBootstrap group(EventLoopGroup parentGroup, EventLoopGroup childGroup) {
         super.group(parentGroup);
@@ -134,9 +138,11 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
      * The {@link Class} which is used to create {@link ServerChannel} instances from.
      * You either use this or {@link #channelFactory(ServerChannelFactory)} if your
      * {@link Channel} implementation has no no-args constructor.
+     *
      */
     public ServerBootstrap channel(Class<? extends ServerChannel> channelClass) {
         requireNonNull(channelClass, "channelClass");
+        //通过反射创建NioServerSocketChannel
         return channelFactory(new ReflectiveServerChannelFactory<ServerChannel>(channelClass));
     }
 
@@ -160,6 +166,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
     @Override
     ChannelFuture init(Channel channel) {
         final ChannelPromise promise = channel.newPromise();
+        //设置channel属性
         setChannelOptions(channel, options0().entrySet().toArray(newOptionArray(0)), logger);
         setAttributes(channel, attrs0().entrySet().toArray(newAttrArray(0)));
 

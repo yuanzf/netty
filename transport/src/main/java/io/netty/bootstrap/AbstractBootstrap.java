@@ -70,6 +70,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C, F>, C 
     /**
      * The {@link EventLoopGroup} which is used to handle all the events for the to-be-created
      * {@link Channel}
+     *
+     * 次方被服务端和客户端重用，
+     * group：执行和调度网络事件的读写
      */
     public B group(EventLoopGroup group) {
         requireNonNull(group, "group");
@@ -207,21 +210,25 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C, F>, C 
      * Create a new {@link Channel} and bind it.
      */
     public ChannelFuture bind(SocketAddress localAddress) {
+        //检查parentGroup是否为空
         validate();
         requireNonNull(localAddress, "localAddress");
         return doBind(localAddress);
     }
 
+    //绑定端口
     private ChannelFuture doBind(final SocketAddress localAddress) {
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
         if (regFuture.cause() != null) {
+            //创建失败
             return regFuture;
         }
 
         if (regFuture.isDone()) {
             // At this point we know that the registration was complete and successful.
             ChannelPromise promise = channel.newPromise();
+            //监听通道关闭事件
             doBind0(regFuture, channel, localAddress, promise);
             return promise;
         } else {
@@ -245,14 +252,21 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C, F>, C 
         EventLoop loop = group.next();
         final Channel channel;
         try {
+            //通过ChannelFactory创建ServerChannel
+            //loop是来接收连接的  parentGroup
             channel = newChannel(loop);
         } catch (Throwable t) {
             return new FailedChannel(loop).newFailedFuture(t);
         }
 
+        //返回channelFuture，因为netty中所有的I/O都是异步，通过ChannelFuture获得返回结果
         final ChannelPromise promise = channel.newPromise();
+        //启动线程初始化channel，启动并新建channelFutureList.监听ChannelFuture，
+        // 当channelFuture启动成功后立马自行channelFutureListener中的操作
         loop.execute(() -> init(channel).addListener((ChannelFutureListener) future -> {
             if (future.isSuccess()) {
+                //如果出事化channel成功则将promise注册到channel上，
+                //这样channel中pipeLine中handler处理完之后就会通知promise
                 channel.register(promise);
             } else {
                 channel.unsafe().closeForcibly();

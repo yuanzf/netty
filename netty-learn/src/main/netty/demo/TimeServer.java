@@ -17,12 +17,17 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 public class TimeServer {
     public void bind(int port) {
 
+        //acceptor线程组
+        //EventLoopGroup是EventExecutor的数组，EventExecutor是执行线程用的。
         EventLoopGroup bossGroup = new NioEventLoopGroup();
         EventLoopGroup workerGroup = new NioEventLoopGroup();
         try {
             ServerBootstrap b = new ServerBootstrap();
+            //设置工作组合接收组
             b.group(bossGroup,workerGroup)
+                    //创建NioServerSocketChannel工厂类，后期需要新建ServerSocket只需调用newInstance方法即可
                     .channel(NioServerSocketChannel.class)
+                    //设定TCP参数
                     .option(ChannelOption.SO_BACKLOG,1024)
                     .childHandler(new ChildChannelHandler());
             //绑定端口同步等待成功
