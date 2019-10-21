@@ -57,7 +57,10 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
     private volatile EventLoopGroup childGroup;
     private volatile ChannelHandler childHandler;
 
-    //后期需要创建ServerSocketChannel，只需要调用给你channelFactory.newInstace()方法，
+    /**
+     * 后期需要创建ServerSocketChannel，只需要调用给你channelFactory.newInstace()方法，
+     *
+     */
     volatile ServerChannelFactory<? extends ServerChannel> channelFactory;
 
     public ServerBootstrap() { }
@@ -142,7 +145,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
      */
     public ServerBootstrap channel(Class<? extends ServerChannel> channelClass) {
         requireNonNull(channelClass, "channelClass");
-        //通过反射创建NioServerSocketChannel
+        //通过反射创建NioServerSocketChannel，ReflectiveServerChannelFactory持有ServerChannel的构造函数，可以通过构造函数创建channel
         return channelFactory(new ReflectiveServerChannelFactory<ServerChannel>(channelClass));
     }
 
@@ -152,6 +155,10 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
      * is not working for you because of some more complex needs. If your {@link Channel} implementation
      * has a no-args constructor, its highly recommend to just use {@link #channel(Class)} to
      * simplify your code.
+     *
+     * 调用AbstractBootstrp.blind(),方法时构造ServerBootstrap，
+     * ReflectiveServerChannelFactory持有ServerChannel的构造函数，可以通过构造函数创建channel
+     *
      */
     public ServerBootstrap channelFactory(ServerChannelFactory<? extends ServerChannel> channelFactory) {
         requireNonNull(channelFactory, "channelFactory");

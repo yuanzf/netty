@@ -38,6 +38,7 @@ public final class ReflectiveServerChannelFactory<T extends ServerChannel> imple
     public ReflectiveServerChannelFactory(Class<? extends T> clazz) {
         requireNonNull(clazz, "clazz");
         try {
+            //获取构造函数
             this.constructor = clazz.getConstructor(EventLoop.class, EventLoopGroup.class);
         } catch (NoSuchMethodException e) {
             throw new IllegalArgumentException("Class " + StringUtil.simpleClassName(clazz) +
