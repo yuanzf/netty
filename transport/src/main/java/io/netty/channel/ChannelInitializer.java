@@ -24,10 +24,12 @@ import io.netty.util.internal.logging.InternalLoggerFactory;
 /**
  * A special {@link ChannelInboundHandler} which offers an easy way to initialize a {@link Channel} once it was
  * registered to its {@link EventLoop}.
+ *一种特别的ChannelInboundHandler，一旦Channel注册到EventLoop中ChannelInboundHandler提供一种简便的方法初始化Channel。
  *
  * Implementations are most often used in the context of {@link Bootstrap#handler(ChannelHandler)} ,
  * {@link ServerBootstrap#handler(ChannelHandler)} and {@link ServerBootstrap#childHandler(ChannelHandler)} to
  * setup the {@link ChannelPipeline} of a {@link Channel}.
+ *ServerBootstrap必须通过调用handler(ChannelHandler)和childHandler(ChannelHandler)来设置Channel的ChannelPipeline.
  *
  * <pre>
  *
@@ -43,7 +45,7 @@ import io.netty.util.internal.logging.InternalLoggerFactory;
  * ...
  * </pre>
  * Be aware that this class is marked as {@link Sharable} and so the implementation must be safe to be re-used.
- *
+ *这个类有@Sharable注解，所以这类必须是安全和可重用的。
  * @param <C>   A sub-type of {@link Channel}
  */
 @Sharable

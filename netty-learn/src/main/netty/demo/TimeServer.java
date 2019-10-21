@@ -27,7 +27,7 @@ public class TimeServer {
             b.group(bossGroup,workerGroup)
                     //创建NioServerSocketChannel工厂类，后期需要新建ServerSocket只需调用newInstance方法即可
                     .channel(NioServerSocketChannel.class)
-                    //设定TCP参数
+                    //设定serverChannel参数
                     .option(ChannelOption.SO_BACKLOG,1024)
                     .childHandler(new ChildChannelHandler());
             //绑定端口同步等待成功

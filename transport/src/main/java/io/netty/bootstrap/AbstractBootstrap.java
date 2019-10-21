@@ -51,6 +51,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C, F>, C 
 
     volatile EventLoopGroup group;
     private volatile SocketAddress localAddress;
+    /**
+     * 保存ServerChannel的参数
+     */
     private final Map<ChannelOption<?>, Object> options = new ConcurrentHashMap<>();
     private final Map<AttributeKey<?>, Object> attrs = new ConcurrentHashMap<>();
     private volatile ChannelHandler handler;
