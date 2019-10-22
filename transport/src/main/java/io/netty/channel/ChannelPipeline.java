@@ -31,19 +31,22 @@ import java.util.NoSuchElementException;
  * {@link Channel}. {@link ChannelPipeline} implements an advanced form of the
  * <a href="http://www.oracle.com/technetwork/java/interceptingfilter-142169.html">Intercepting Filter</a> pattern
  * to give a user full control over how an event is handled and how the {@link ChannelHandler}s in a pipeline
- * interact with each other.
+ * interact(相互作用) with each other.
  *
  * <h3>Creation of a pipeline</h3>
  *
  * Each channel has its own pipeline and it is created automatically when a new channel is created.
- *
+ *每个channel在创建的时候回自动创建属于自己pipeline
  * <h3>How an event flows in a pipeline</h3>
  *
  * The following diagram describes how I/O events are processed by {@link ChannelHandler}s in a {@link ChannelPipeline}
  * typically. An I/O event is handled by a {@link ChannelHandler} (which may handle inbound or / and outbound events)
- * and be forwarded to its closest handler by calling the event propagation methods defined in
+ * and be forwarded to its closest handler by calling the event propagation(传播) methods defined in
  * {@link ChannelHandlerContext}, such as {@link ChannelHandlerContext#fireChannelRead(Object)} and
  * {@link ChannelHandlerContext#write(Object)}.
+ *下图描述了在ChannelPipeline中ChannelHandler是如何处理I/O事件的,当I/O事件被ChannelHandler处理的时候(可能是输入事件也可能是输出事件)，
+ * 通过调用给你事件传播方法转发到最近的一个handler，事件的传播方法定义在ChannelHandlerContext中，例如ChannelHandlerContext.fireChannelRead(Object)
+ * ChannelHandlerContext.write(Object)
  *
  * <pre>
  *                                                 I/O Request
@@ -90,6 +93,10 @@ import java.util.NoSuchElementException;
  * diagram.  The inbound data is often read from a remote peer via the actual input operation such as
  * {@link SocketChannel#read(ByteBuffer)}.  If an inbound event goes beyond the top inbound handler, it is discarded
  * silently, or logged if it needs your attention.
+ *
+ * 输入事件将由输入Handler处理，如上图左边所示，由下及上的来执行。输出处理handler一般处理通过I/O线程产生的数据，输入数据一般是
+ * 通过SocketChannel#read(ByteBuffer)从远程端获取。当输入事件走到输入Handler顶端的时候，将会被返回，如果有需要你可以将其打印
+ *
  * <p>
  * An outbound event is handled by the outbound handler in the top-down direction as shown on the right side of the
  * diagram.  An outbound handler usually generates or transforms the outbound traffic such as write requests.
@@ -213,7 +220,7 @@ public interface ChannelPipeline
     /**
      * Inserts a {@link ChannelHandler} at the first position of this pipeline.
      *
-     * @param name     the name of the handler to insert first
+     * @param name     the name of the handler to insert first，名字必须唯一
      * @param handler  the handler to insert first
      *
      * @throws IllegalArgumentException
@@ -226,7 +233,7 @@ public interface ChannelPipeline
     /**
      * Appends a {@link ChannelHandler} at the last position of this pipeline.
      *
-     * @param name     the name of the handler to append
+     * @param name     the name of the handler to append名字必须唯一
      * @param handler  the handler to append
      *
      * @throws IllegalArgumentException

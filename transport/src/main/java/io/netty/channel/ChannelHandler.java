@@ -35,16 +35,16 @@ import java.net.SocketAddress;
  * <h3>The context object</h3>
  * <p>
  * A {@link ChannelHandler} is provided with a {@link ChannelHandlerContext}
- * object.  A {@link ChannelHandler} is supposed to interact with the
+ * object.  A {@link ChannelHandler} is supposed to interact(相互作用) with the
  * {@link ChannelPipeline} it belongs to via a context object.  Using the
  * context object, the {@link ChannelHandler} can pass events upstream or
- * downstream, modify the pipeline dynamically, or store the information
+ * downstream, modify（修改） the pipeline dynamically, or store the information
  * (using {@link AttributeKey}s) which is specific to the handler.
  *
  * <h3>State management</h3>
  *
  * A {@link ChannelHandler} often needs to store some stateful information.
- * The simplest and recommended approach is to use member variables:
+ * The simplest and recommended approach(方法) is to use member variables:
  * <pre>
  * public interface Message {
  *     // your methods here
@@ -73,7 +73,7 @@ import java.net.SocketAddress;
  * Because the handler instance has a state variable which is dedicated to
  * one connection, you have to create a new handler instance for each new
  * channel to avoid a race condition where a unauthenticated client can get
- * the confidential information:
+ * the confidential(机密) information:
  * <pre>
  * // Create a new handler instance per channel.
  * // See {@link ChannelInitializer#initChannel(Channel)}.
