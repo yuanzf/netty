@@ -216,6 +216,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         if (msg instanceof ByteBuf) {
             ByteBuf buf = (ByteBuf) msg;
             if (!buf.isReadable()) {
+                //该消息不可读，需要丢弃。
                 in.remove();
                 return 0;
             }
@@ -346,6 +347,8 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         }
         final int interestOps = key.interestOps();
         if ((interestOps & SelectionKey.OP_WRITE) != 0) {
+            //进入if说明当前SelectionKey是可写的
+            //下面清楚可写标志位
             key.interestOps(interestOps & ~SelectionKey.OP_WRITE);
         }
     }

@@ -197,6 +197,8 @@ public interface Channel extends AttributeMap, ChannelOutboundInvoker, Comparabl
      * <em>Unsafe</em> operations that should <em>never</em> be called from user-code. These methods
      * are only provided to implement the actual transport, and must be invoked from an I/O thread except for the
      * following methods:
+     * Unsafe类是Channel的辅助接口，他不应该被用户代码直接调用。实际的I/O读写操作都是由UnSafe接口负责完成的。
+     *
      * <ul>
      *   <li>{@link #localAddress()}</li>
      *   <li>{@link #remoteAddress()}</li>
@@ -217,24 +219,31 @@ public interface Channel extends AttributeMap, ChannelOutboundInvoker, Comparabl
         /**
          * Return the {@link SocketAddress} to which is bound local or
          * {@code null} if none.
+         *
+         * 返回本地绑定的Socket地址
          */
         SocketAddress localAddress();
 
         /**
          * Return the {@link SocketAddress} to which is bound remote or
          * {@code null} if none is bound yet.
+         *
+         * 返回通信对端的Socket地址
          */
         SocketAddress remoteAddress();
 
         /**
          * Register the {@link Channel} of the {@link ChannelPromise} and notify
          * the {@link ChannelFuture} once the registration was complete.
+         *
+         * 注册Channel到多路复用器上，一旦注册完成，通知ChannelFuture
          */
         void register(ChannelPromise promise);
 
         /**
          * Bind the {@link SocketAddress} to the {@link Channel} of the {@link ChannelPromise} and notify
          * it once its done.
+         * 绑定本地地址localAddress到当前的Channel上，一旦完成通知ChannelFuture
          */
         void bind(SocketAddress localAddress, ChannelPromise promise);
 
@@ -244,46 +253,62 @@ public interface Channel extends AttributeMap, ChannelOutboundInvoker, Comparabl
          * pass {@code null} to it.
          *
          * The {@link ChannelPromise} will get notified once the connect operation was complete.
+         *
+         * 绑定本地的localAddress之后，连接服务端，一旦操作完成通知ChannelFuture
          */
         void connect(SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise);
 
         /**
          * Disconnect the {@link Channel} of the {@link ChannelFuture} and notify the {@link ChannelPromise} once the
          * operation was complete.
+         *
+         * 端开Channel的连接，一旦完成，通知ChannelPromis
          */
         void disconnect(ChannelPromise promise);
 
         /**
          * Close the {@link Channel} of the {@link ChannelPromise} and notify the {@link ChannelPromise} once the
          * operation was complete.
+         *
+         * 关闭连接，一旦完成，通知ChannelPromise
          */
         void close(ChannelPromise promise);
 
         /**
          * Closes the {@link Channel} immediately without firing any events.  Probably only useful
          * when registration attempt failed.
+         * 强制立即关闭连接
          */
         void closeForcibly();
 
         /**
          * Deregister the {@link Channel} of the {@link ChannelPromise} from {@link EventLoop} and notify the
          * {@link ChannelPromise} once the operation was complete.
+         *
+         * 从EventLoop中注销Channel，一旦完成，通知ChannelPromise
          */
         void deregister(ChannelPromise promise);
 
         /**
          * Schedules a read operation that fills the inbound buffer of the first {@link ChannelInboundHandler} in the
          * {@link ChannelPipeline}.  If there's already a pending read operation, this method does nothing.
+         *
+         * 设置网络操作位为读  用于读取消息
          */
         void beginRead();
 
         /**
          * Schedules a write operation.
+         *
+         * 调度写写操作
+         * 一旦完成，通知ChannelPromis
          */
         void write(Object msg, ChannelPromise promise);
 
         /**
          * Flush out all write operations scheduled via {@link #write(Object, ChannelPromise)}.
+         *
+         * 将缓冲区中的消息写入到Channel中
          */
         void flush();
 
@@ -291,11 +316,15 @@ public interface Channel extends AttributeMap, ChannelOutboundInvoker, Comparabl
          * Return a special ChannelPromise which can be reused and passed to the operations in {@link Unsafe}.
          * It will never be notified of a success or error and so is only a placeholder for operations
          * that take a {@link ChannelPromise} as argument but for which you not want to get notified.
+         *
+         * 返回一个特殊的可重用的和传递ChannelPromise,它不用于操作成功或者失败的通知器，仅作为一个容器使用。
          */
         ChannelPromise voidPromise();
 
         /**
          * Returns the {@link ChannelOutboundBuffer} of the {@link Channel} where the pending write requests are stored.
+         *
+         * 返回消息发送缓冲区
          */
         ChannelOutboundBuffer outboundBuffer();
     }

@@ -279,8 +279,10 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
 
         boolean success = false;
         try {
+            //是否连接成功
             boolean connected = SocketUtils.connect(javaChannel(), remoteAddress);
             if (!connected) {
+                //暂时没有连接上，服务端没有ACK应答，连接结果不确定
                 selectionKey().interestOps(SelectionKey.OP_CONNECT);
             }
             success = true;
@@ -374,6 +376,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
                     int attemptedBytes = buffer.remaining();
                     final int localWrittenBytes = ch.write(buffer);
                     if (localWrittenBytes <= 0) {
+                        //说明TCP发送缓冲区已经满了，很有可能无法再写进去
                         incompleteWrite(true);
                         return;
                     }

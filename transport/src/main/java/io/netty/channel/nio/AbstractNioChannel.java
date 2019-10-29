@@ -48,8 +48,13 @@ public abstract class AbstractNioChannel extends AbstractChannel {
     private static final InternalLogger logger =
             InternalLoggerFactory.getInstance(AbstractNioChannel.class);
 
+    //是jdk SocketChannel,和ServerSocketChannel共同的父类
     private final SelectableChannel ch;
+
+    //代表jdk SelectionKey 的 OP_READ
     protected final int readInterestOp;
+
+    //是Channel注册到EventLoop后返回的选择的键
     volatile SelectionKey selectionKey;
     boolean readPending;
     private final Runnable clearReadPendingRunnable = this::clearReadPending0;
@@ -358,6 +363,10 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         eventLoop().unsafe().deregister(this);
     }
 
+    /**
+     * 判断当前的SelectionKey是否可读
+     * @throws Exception
+     */
     @Override
     protected void doBeginRead() throws Exception {
         // Channel.read() or ChannelHandlerContext.read() was called

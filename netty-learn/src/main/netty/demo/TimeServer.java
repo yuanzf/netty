@@ -45,6 +45,7 @@ public class TimeServer {
     private class ChildChannelHandler extends ChannelInitializer<SocketChannel> {
         @Override
         protected void initChannel(SocketChannel ch) throws Exception {
+            //ChannelPipeline在链路创建的时候初始化。
             ch.pipeline().addLast(new TimeServerHandler());
         }
     }

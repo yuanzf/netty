@@ -344,6 +344,7 @@ public final class ChannelOutboundBuffer {
             final int readableBytes = buf.writerIndex() - readerIndex;
 
             if (readableBytes <= writtenBytes) {
+                //buff中可读的字节数小于已读的字节数
                 if (writtenBytes != 0) {
                     progress(readableBytes);
                     writtenBytes -= readableBytes;

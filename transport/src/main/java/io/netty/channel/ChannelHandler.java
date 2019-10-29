@@ -157,6 +157,10 @@ import java.net.SocketAddress;
  * {@link ChannelPipeline} to find out more about inbound and outbound operations,
  * what fundamental differences they have, how they flow in a  pipeline,  and how to handle
  * the operation in your application.
+ *
+ * ChannelHandler是Netty提供给用户定制和扩展的关键接口，利用ChannelHandler用户可以完成大多数的功能定制，
+ * 消息的编码，解码，心跳，安全认证。
+ *
  */
 public interface ChannelHandler {
 
