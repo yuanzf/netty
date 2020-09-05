@@ -123,6 +123,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C, F>, C 
     /**
      * Allow to specify a {@link ChannelOption} which is used for the {@link Channel} instances once they got
      * created. Use a value of {@code null} to remove a previous set {@link ChannelOption}.
+     * 给ServerChannel添加配置
      */
     public <T> B option(ChannelOption<T> option, T value) {
         requireNonNull(option, "option");
@@ -190,6 +191,8 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C, F>, C 
 
     /**
      * Create a new {@link Channel} and bind it.
+     *
+     * 用于服务端，用来设置占用的端口号
      */
     public ChannelFuture bind(int inetPort) {
         return bind(new InetSocketAddress(inetPort));
@@ -301,6 +304,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C, F>, C 
 
     /**
      * the {@link ChannelHandler} to use for serving the requests.
+     * handler也是添加自定义的Handler，但是handler添加Handler添加到了bossGroup中，
+     * ChannelHandler添加到了workGroup中
+     *
      */
     public B handler(ChannelHandler handler) {
         requireNonNull(handler, "handler");

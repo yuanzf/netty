@@ -122,6 +122,8 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             name = generateName(handler);
         }
 
+        //每个ChannelHandler对应着一个ChannelHandlerContext,ChannelHandlerContext将ChannelHandler和
+        //ChannelPipeline关联起来，并且ChannelHandler之间的信息相互传递也要依靠ChannelHandlerContext
         DefaultChannelHandlerContext newCtx = newContext(name, handler);
         EventExecutor executor = executor();
         boolean inEventLoop = executor.inEventLoop();
@@ -197,25 +199,34 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     public final ChannelPipeline addBefore(String baseName, String name, ChannelHandler handler) {
         final DefaultChannelHandlerContext ctx;
 
+        //检查handler是否重复添加，在Handler中有个字段标记是否已经添加
+        //如果channelHandler是共享的则可在多个ChannePipeline中添加
         checkMultiplicity(handler);
         if (name == null) {
+            //自动给Handler生辰名字 == 》“类名”+”#0“
             name = generateName(handler);
         }
 
         DefaultChannelHandlerContext newCtx = newContext(name, handler);
         EventExecutor executor = executor();
+        //判断当前线程是否在EventLoop中执行
         boolean inEventLoop = executor.inEventLoop();
         synchronized (handlers) {
+            //找到目标对一个的ChannelHandlerContext索引位置
             int i = findCtxIdx(context -> context.name().equals(baseName));
 
             if (i == -1) {
+                //baseName的channelHandler不存在
                 throw new NoSuchElementException(baseName);
             }
 
             if (context(name) != null) {
+                //检查name的ChannelHandler是否已经添加
                 throw new IllegalArgumentException("Duplicate handler name: " + name);
             }
+            //获取目标的ChannelHandlerContext
             ctx = handlers.get(i);
+            //将新的ChannelHandlerContext添加到目的位置
             handlers.add(i, newCtx);
             if (!inEventLoop) {
                 try {

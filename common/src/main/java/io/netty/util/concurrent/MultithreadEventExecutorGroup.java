@@ -108,7 +108,7 @@ public class MultithreadEventExecutorGroup extends AbstractEventExecutorGroup {
      * @param nThreads          the number of threads that will be used by this instance.
      * @param executor          the Executor to use, or {@code null} if the default should be used.
      * @param maxPendingTasks   the maximum number of pending tasks before new tasks will be rejected.
-     * @param rejectedHandler   the {@link RejectedExecutionHandler} to use.
+     * @param rejectedHandler   the {@link RejectedExecutionHandler} to use。当任务队列已满，添加任务到队列失败时，会调用rejectedHandler的reject方法
      * @param args              arguments which will passed to each {@link #newChild(Executor, int,
      * RejectedExecutionHandler, Object...)} call
      */
@@ -119,6 +119,7 @@ public class MultithreadEventExecutorGroup extends AbstractEventExecutorGroup {
         }
 
         if (executor == null) {
+            //构造线程执行器，ThreadPerTaskExecutor.execute创建线程并执行，在DefaultThreadFactory中对线程执行器进行了命名
             executor = new ThreadPerTaskExecutor(new DefaultThreadFactory(getClass()));
         }
 

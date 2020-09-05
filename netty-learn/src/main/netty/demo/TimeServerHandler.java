@@ -34,6 +34,11 @@ public class TimeServerHandler extends ChannelHandlerAdapter {
         ReferenceCountUtil.release(req);
     }
 
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        System.out.println("channel 激活");
+    }
+
     public void channelReadComplate(ChannelHandlerContext ctx) throws  Exception {
         ctx.flush();
     }

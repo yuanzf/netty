@@ -86,8 +86,9 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
      * Set the {@link EventLoopGroup} for the parent (acceptor) and the child (client). These
      * {@link EventLoopGroup}'s are used to handle all the events and IO for {@link ServerChannel} and
      * {@link Channel}'s.
-     *
-     *
+     *  设置工作组，这个和netty使用的reactor模型有关，netty默认使用的是多线程reactor模型。
+     *      parentGroup：负责监听
+     *      childGroup：负责读写
      */
     public ServerBootstrap group(EventLoopGroup parentGroup, EventLoopGroup childGroup) {
         super.group(parentGroup);
@@ -103,6 +104,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
      * Allow to specify a {@link ChannelOption} which is used for the {@link Channel} instances once they get created
      * (after the acceptor accepted the {@link Channel}). Use a value of {@code null} to remove a previous set
      * {@link ChannelOption}.
+     * 用来给接收到的通道添加配置
      */
     public <T> ServerBootstrap childOption(ChannelOption<T> childOption, T value) {
         requireNonNull(childOption, "childOption");
@@ -130,6 +132,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
 
     /**
      * Set the {@link ChannelHandler} which is used to serve the request for the {@link Channel}'s.
+     * 设置业务处理类，自定义的Handler
      */
     public ServerBootstrap childHandler(ChannelHandler childHandler) {
         requireNonNull(childHandler, "childHandler");
@@ -141,6 +144,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
      * The {@link Class} which is used to create {@link ServerChannel} instances from.
      * You either use this or {@link #channelFactory(ServerChannelFactory)} if your
      * {@link Channel} implementation has no no-args constructor.
+     * 设置一个服务端的通道实现，
      *
      */
     public ServerBootstrap channel(Class<? extends ServerChannel> channelClass) {
@@ -180,19 +184,24 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         ChannelPipeline p = channel.pipeline();
 
         final ChannelHandler currentChildHandler = childHandler;
+        //设置childOption
         final Entry<ChannelOption<?>, Object>[] currentChildOptions =
                 childOptions.entrySet().toArray(newOptionArray(0));
+        //设置childtAttrs
         final Entry<AttributeKey<?>, Object>[] currentChildAttrs = childAttrs.entrySet().toArray(newAttrArray(0));
 
+        //配置服务端的pipeline
         p.addLast(new ChannelInitializer<Channel>() {
             @Override
             public void initChannel(final Channel ch) {
                 final ChannelPipeline pipeline = ch.pipeline();
+                //此处的Handler用户代码中初始化的
                 ChannelHandler handler = config.handler();
                 if (handler != null) {
                     pipeline.addLast(handler);
                 }
-
+                //增加ServerBootstrapAcceptor（连接器）
+                //currentChildHandler：用户自定义的ChannelHandler（在初始化ServerBootstrap时传入）
                 ch.eventLoop().execute(() -> {
                     pipeline.addLast(new ServerBootstrapAcceptor(
                             ch, currentChildHandler, currentChildOptions, currentChildAttrs));

@@ -366,9 +366,14 @@ final class PoolThreadCache {
         }
     }
 
+    /**
+     * 每一个MemoryRegionCache中缓存的数据大小是一致的
+     */
     private abstract static class MemoryRegionCache<T> {
+        //
         private final int size;
         private final Queue<Entry<T>> queue;
+        //内存规格
         private final SizeClass sizeClass;
         private int allocations;
 

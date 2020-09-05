@@ -74,6 +74,7 @@ public class SingleThreadEventExecutor extends AbstractScheduledEventExecutor im
             AtomicReferenceFieldUpdater.newUpdater(
                     SingleThreadEventExecutor.class, ThreadProperties.class, "threadProperties");
 
+    //队列的数量最小是16个
     private final Queue<Runnable> taskQueue;
 
     private volatile Thread thread;
@@ -425,7 +426,7 @@ public class SingleThreadEventExecutor extends AbstractScheduledEventExecutor im
     protected void run() {
         assert inEventLoop();
         do {
-            Runnable task = takeTask();
+            Runnable task =  ();
             if (task != null) {
                 task.run();
                 updateLastExecutionTime();

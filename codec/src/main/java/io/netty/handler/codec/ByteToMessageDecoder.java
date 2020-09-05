@@ -265,15 +265,19 @@ public abstract class ByteToMessageDecoder extends ChannelHandlerAdapter impleme
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         if (msg instanceof ByteBuf) {
+            //最终解码的数据会放在out中，往后传递（交给后续的handler来处理）
             CodecOutputList out = CodecOutputList.newInstance();
             try {
                 ByteBuf data = (ByteBuf) msg;
                 first = cumulation == null;
+                //判断解码器是否缓存了没有解码完的半包消息
                 if (first) {
                     cumulation = data;
                 } else {
+                    //有缓存上次没有解码完的的ByteBuf，进行复制操作，将date复制到cumulation中
                     cumulation = cumulator.cumulate(ctx.alloc(), cumulation, data);
                 }
+                //解码
                 callDecode(ctx, cumulation, out);
             } catch (DecoderException e) {
                 throw e;
@@ -287,6 +291,7 @@ public abstract class ByteToMessageDecoder extends ChannelHandlerAdapter impleme
                 } else if (++ numReads >= discardAfterReads) {
                     // We did enough reads already try to discard some bytes so we not risk to see a OOME.
                     // See https://github.com/netty/netty/issues/4275
+                    //当读取的次数超过了16次cumulation中的数据还未读完，则认为可能会产生OOM，因此丢弃一些字节
                     numReads = 0;
                     discardSomeReadBytes();
                 }
@@ -294,6 +299,7 @@ public abstract class ByteToMessageDecoder extends ChannelHandlerAdapter impleme
                 int size = out.size();
                 firedChannelRead |= out.insertSinceRecycled();
                 fireChannelRead(ctx, out, size);
+                //将out清空
                 out.recycle();
             }
         } else {
@@ -303,6 +309,7 @@ public abstract class ByteToMessageDecoder extends ChannelHandlerAdapter impleme
 
     /**
      * Get {@code numElements} out of the {@link List} and forward these through the pipeline.
+     * @param numElements msgs中消息的个数
      */
     static void fireChannelRead(ChannelHandlerContext ctx, List<Object> msgs, int numElements) {
         if (msgs instanceof CodecOutputList) {
@@ -420,27 +427,22 @@ public abstract class ByteToMessageDecoder extends ChannelHandlerAdapter impleme
                 int outSize = out.size();
 
                 if (outSize > 0) {
+                    //使用ctx对应的ChannelHandler处理out中的消息
                     fireChannelRead(ctx, out, outSize);
                     out.clear();
 
                     // Check if this handler was removed before continuing with decoding.
                     // If it was removed, it is not safe to continue to operate on the buffer.
-                    //
-                    // See:
-                    // - https://github.com/netty/netty/issues/4635
                     if (ctx.isRemoved()) {
                         break;
                     }
                     outSize = 0;
                 }
-
+                // in.readableBytes() ByteBuf中可读的字节数
                 int oldInputLength = in.readableBytes();
                 decodeRemovalReentryProtection(ctx, in, out);
 
                 // Check if this handler was removed before continuing the loop.
-                // If it was removed, it is not safe to continue to operate on the buffer.
-                //
-                // See https://github.com/netty/netty/issues/1664
                 if (ctx.isRemoved()) {
                     break;
                 }
@@ -452,13 +454,13 @@ public abstract class ByteToMessageDecoder extends ChannelHandlerAdapter impleme
                         continue;
                     }
                 }
-
+                //说明解码器没有消费ByteBuf，意味着解码失败
                 if (oldInputLength == in.readableBytes()) {
                     throw new DecoderException(
                             StringUtil.simpleClassName(getClass()) +
                                     ".decode() did not read anything but decoded a message.");
                 }
-
+                //如果是单条消息解码器，第一次解码完之后就退出
                 if (isSingleDecode()) {
                     break;
                 }

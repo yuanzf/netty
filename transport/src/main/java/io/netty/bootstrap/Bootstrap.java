@@ -150,6 +150,9 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel, ChannelFact
 
     /**
      * Connect a {@link Channel} to the remote peer.
+     *
+     * 用户客户端，连接服务器端
+     *
      */
     public ChannelFuture connect(String inetHost, int inetPort) {
         return connect(InetSocketAddress.createUnresolved(inetHost, inetPort));

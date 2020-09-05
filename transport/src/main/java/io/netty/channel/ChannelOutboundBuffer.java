@@ -42,6 +42,8 @@ import static java.util.Objects.requireNonNull;
  * (Transport implementors only) an internal data structure used by {@link AbstractChannel} to store its pending
  * outbound write requests.
  * <p>
+ *
+ *     一个内部数据结构，AbstractChannel用于存储其挂起的出站写请求。
  * All methods must be called by a transport implementation from an I/O thread, except the following ones:
  * <ul>
  * <li>{@link #size()} and {@link #isEmpty()}</li>

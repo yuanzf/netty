@@ -33,9 +33,7 @@ import java.util.List;
  * For example, <tt>{@link LengthFieldPrepender}(2)</tt> will encode the
  * following 12-bytes string:
  * <pre>
- * +----------------+
- * | "HELLO, WORLD" |
- * +----------------+
+
  * </pre>
  * into the following:
  * <pre>

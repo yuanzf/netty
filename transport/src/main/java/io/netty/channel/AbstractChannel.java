@@ -442,8 +442,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
      */
     protected abstract class AbstractUnsafe implements Unsafe {
 
+        //存储发送消息
         private volatile ChannelOutboundBuffer outboundBuffer = new ChannelOutboundBuffer(AbstractChannel.this);
+        //存储接受消息的
         private RecvByteBufAllocator.Handle recvHandle;
+        //计算消息体大小
         private MessageSizeEstimator.Handle estimatorHandler;
 
         private boolean inFlush0;
@@ -451,6 +454,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
         private boolean neverRegistered = true;
 
         private void assertEventLoop() {
+            //判断当前线程是否在EventLoop中
             assert eventLoop.inEventLoop();
         }
 
@@ -477,22 +481,30 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             return remoteAddress0();
         }
 
+        /**
+         * channel注册
+         * 如果直接执行register()方法，存在多线程并发操作Channel问题
+         * @param promise
+         */
         @Override
         public final void register(final ChannelPromise promise) {
+            //当前注册线程是否在eventLoop中
             assertEventLoop();
 
             if (isRegistered()) {
+                //已注册
                 promise.setFailure(new IllegalStateException("registered to an event loop already"));
                 return;
             }
 
             try {
-                // check if the channel is still open as it could be closed in the mean time when the register
-                // call was outside of the eventLoop
+                // check if the channel is still open as it could be closed in the mean time when the register call was outside of the eventLoop
                 if (!promise.setUncancellable() || !ensureOpen(promise)) {
+                    //做检查确保Channel未关闭，
                     return;
                 }
                 boolean firstRegistration = neverRegistered;
+                //将Channel注册到Selector上
                 doRegister();
                 neverRegistered = false;
                 registered = true;
@@ -547,7 +559,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             if (!wasActive && isActive()) {
                 invokeLater(() -> {
-                    pipeline.fireChannelActive();
+                    pipeline.fireChannelActive();//出发激活事件
                     readIfIsAutoRead();
                 });
             }
